@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>F&B GenAI – Admin/Owner Dashboard</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#111827; --text:#e5e7eb; --sub:#94a3b8;
+    --brand:#22d3ee; --accent:#a78bfa; --good:#10b981; --warn:#f59e0b; --bad:#ef4444;
+    --border:#1f2937; --chip:#334155; --shadow:0 10px 30px rgba(0,0,0,.35); --r:14px;
+  }
+  *{box-sizing:border-box} body{margin:0;background:#0b1220;color:var(--text);
+    font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;}
+  a{color:var(--brand);text-decoration:none}
+  .app{display:grid;grid-template-columns:280px 1fr;min-height:100vh}
+  /* sidebar */
+  .sidebar{background:linear-gradient(180deg,rgba(34,211,238,.08),rgba(167,139,250,.05)),var(--panel);
+    border-right:1px solid var(--border);padding:20px;position:sticky;top:0;height:100vh;overflow:auto}
+  .brand{display:flex;gap:10px;align-items:center;margin-bottom:14px;font-weight:800}
+  .logo{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:#091018;
+    background:conic-gradient(from 210deg,var(--brand),var(--accent));box-shadow:var(--shadow)}
+  .role{color:var(--sub);margin-bottom:14px}
+  nav .group{margin:16px 0 6px;color:var(--sub);font-size:.8rem;text-transform:uppercase;letter-spacing:.12em}
+  nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:6px 0;border-radius:10px}
+  nav a:hover,nav a.active{background:#0b1220;outline:1px solid #1d2a44}
+  .chip{background:var(--chip);padding:2px 8px;border-radius:999px;font-size:.73rem;color:#cbd5e1}
+  /* main */
+  main{padding:24px 28px}
+  .header{display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+  .search{display:flex;gap:8px;flex:1 1 320px}
+  .search input,.btn{border:1px solid var(--border);border-radius:10px;background:#0b1220;color:var(--text)}
+  .search input{flex:1;padding:12px 14px}
+  .search button,.btn.primary{background:linear-gradient(90deg,var(--brand),var(--accent));color:#051019;font-weight:800}
+  .kpis{display:grid;grid-template-columns:repeat(4,minmax(200px,1fr));gap:16px;margin:16px 0 6px}
+  .card{background:linear-gradient(180deg,rgba(167,139,250,.05),rgba(34,211,238,.06)),#0b1220;
+    border:1px solid var(--border);border-radius:var(--r);padding:16px;box-shadow:var(--shadow)}
+  .card h3{margin:0 0 10px;color:#cbd5e1;font-size:1rem}
+  .metric{display:flex;gap:8px;align-items:baseline;font-weight:800;font-size:1.6rem}
+  .trend.up{color:var(--good)} .trend.down{color:var(--bad)} .muted{color:var(--sub);font-size:.9rem}
+  .progress{height:8px;border-radius:999px;background:#111827;overflow:hidden}
+  .bar{height:100%;background:linear-gradient(90deg,var(--brand),var(--accent))}
+  .grid-2{display:grid;grid-template-columns:1.2fr .8fr;gap:16px;margin-top:10px}
+  .panel{background:#0b1220;border:1px solid var(--border);border-radius:var(--r);padding:16px;box-shadow:var(--shadow)}
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+  .btn{padding:8px 12px}
+  table{width:100%;border-collapse:collapse;font-size:.95rem}
+  th,td{padding:10px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{text-align:left;color:#cbd5e1;font-size:.82rem;text-transform:uppercase;letter-spacing:.08em}
+  .status{display:inline-flex;gap:6px;align-items:center;padding:2px 8px;border-radius:999px;font-size:.8rem}
+  .s-good{background:rgba(16,185,129,.15);color:var(--good);border:1px solid rgba(16,185,129,.35)}
+  .s-warn{background:rgba(245,158,11,.15);color:var(--warn);border:1px solid rgba(245,158,11,.35)}
+  .s-bad{background:rgba(239,68,68,.15);color:var(--bad);border:1px solid rgba(239,68,68,.35)}
+  .pill{padding:2px 8px;border-radius:999px;background:#111827;color:#cbd5e1;font-size:.75rem}
+  footer{color:var(--sub);font-size:.85rem;padding:18px 0 8px}
+  @media (max-width:1100px){.app{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}.grid-2{grid-template-columns:1fr}.sidebar{position:relative;height:auto}}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="brand"><div class="logo">AI</div><div>GenAI Kitchen Suite</div></div>
+    <div class="role">Signed in as <strong>Owner</strong></div>
+    <nav>
+      <div class="group">Operations</div>
+      <a href="#overview" class="active">Overview</a>
+      <a href="#locations">Locations</a>
+      <a href="#users">Users & Roles</a>
+      <a href="#menu">Menu & Recipes</a>
+      <a href="#stations">Stations & SLA</a>
+      <div class="group">Inventory</div>
+      <a href="#stock">Inventory & Counts</a>
+      <a href="#purchasing">Purchasing</a>
+      <div class="group">AI</div>
+      <a href="#forecast">Demand & Prep Plans <span class="chip">GenAI</span></a>
+      <a href="#alerts">Live Alerts</a>
+      <a href="#kpi">Service KPIs</a>
+    </nav>
+  </aside>
+
+  <!-- MAIN -->
+  <main>
+    <header class="header">
+      <h1 style="margin:0">Admin / Owner Dashboard</h1>
+      <div class="search">
+        <input placeholder="Search locations, users, items…" aria-label="Search" />
+        <button>Search</button>
+      </div>
+    </header>
+
+    <!-- KPIs (maps to service_periods, orders, kds_tickets, waste_events) -->
+    <section id="overview">
+      <div class="kpis">
+        <div class="card">
+          <h3>On-time Orders (Today)</h3>
+          <div class="metric">92% <small class="trend up">+4.3%</small></div>
+          <div class="progress"><div class="bar" style="width:92%"></div></div>
+          <div class="muted">Target SLA across all stations.</div>
+        </div>
+        <div class="card">
+          <h3>Avg. Wait Time</h3>
+          <div class="metric">9.4m <small class="trend down">-1.2m</small></div>
+          <div class="muted">Dine-in and delivery combined.</div>
+        </div>
+        <div class="card">
+          <h3>Waste Cost (This Week)</h3>
+          <div class="metric">$236 <small class="trend down">-18%</small></div>
+          <div class="muted">From logged <code>waste_events</code>.</div>
+        </div>
+        <div class="card">
+          <h3>Low-Stock Items</h3>
+          <div class="metric">7 <small class="trend">3 critical</small></div>
+          <div class="muted">AI suggests restock below.</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Alerts (maps to alerts) -->
+        <div class="panel" id="alerts">
+          <div class="toolbar">
+            <h2 style="margin:0">Live Alerts</h2>
+            <span class="pill">wait_sla_breach</span>
+            <span class="pill">station_overload</span>
+            <span class="pill">low_stock</span>
+            <button class="btn" id="ackBtn">Acknowledge Selected</button>
+          </div>
+          <table>
+            <thead><tr><th>When</th><th>Kind</th><th>Message</th><th>Location</th><th>Action</th></tr></thead>
+            <tbody id="alertRows">
+              <tr>
+                <td>12:08</td>
+                <td><span class="status s-warn">wait_sla_breach</span></td>
+                <td>Table 14: 2× Beef Ramen is 4m over Grill SLA.</td>
+                <td>Downtown</td>
+                <td><button class="btn" data-action="reprioritize">Re-prioritize</button></td>
+              </tr>
+              <tr>
+                <td>12:03</td>
+                <td><span class="status s-bad">low_stock</span></td>
+                <td>Nori Sheets below par (12 left). ETA PO-1042: Tomorrow.</td>
+                <td>Downtown</td>
+                <td><button class="btn" data-action="transfer">Create Transfer</button></td>
+              </tr>
+              <tr>
+                <td>11:55</td>
+                <td><span class="status s-warn">station_overload</span></td>
+                <td>Maki station load 185% – suggest moving Ken to Maki.</td>
+                <td>Uptown</td>
+                <td><button class="btn" data-action="reassign">Reassign Staff</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Restock (maps to restock_recommendations, suppliers, purchase_orders) -->
+        <div class="panel">
+          <h2 style="margin-top:0">AI Restock Recommendations</h2>
+          <p class="muted">Based on 7-day <code>demand_forecasts</code> and current <code>inventory_levels</code>.</p>
+          <table>
+            <thead><tr><th>Ingredient</th><th>Recommended</th><th>Supplier</th><th>Why</th><th></th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Salmon Fillet (kg)</td><td>+18 kg (3 packs)</td><td>BlueSea Co.</td>
+                <td>Projected 210 maki; 2.8 kg short by Fri.</td>
+                <td><button class="btn primary">Create PO</button></td>
+              </tr>
+              <tr>
+                <td>Nori Sheets (100s)</td><td>+5 packs</td><td>SushiMart</td>
+                <td>Below par; delivery lead 1 day.</td>
+                <td><button class="btn">Add to PO-Draft</button></td>
+              </tr>
+              <tr>
+                <td>Udon (packs)</td><td>+12 packs</td><td>NoodleWorks</td>
+                <td>Weekend spike +22% YOY.</td>
+                <td><button class="btn">Add to PO-Draft</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Locations (maps to locations, devices) -->
+    <section id="locations" class="panel" style="margin-top:18px">
+      <div class="toolbar"><h2 style="margin:0">Locations</h2><button class="btn">Add Location</button></div>
+      <table>
+        <thead><tr><th>Name</th><th>Address</th><th>Hours</th><th>Devices</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Downtown</td><td>12 Bay St</td><td>10:00–22:00</td><td>3 KDS, 12 iPads</td><td><span class="status s-good">Open</span></td></tr>
+          <tr><td>Uptown</td><td>77 King Ave</td><td>11:00–21:00</td><td>2 KDS, 8 iPads</td><td><span class="status s-good">Open</span></td></tr>
+          <tr><td>Campus</td><td>Uni Center</td><td>09:00–20:00</td><td>1 KDS, 4 iPads</td><td><span class="status s-warn">Low Staff</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Users (maps to users, orgs) -->
+    <section id="users" class="panel" style="margin-top:18px">
+      <div class="toolbar"><h2 style="margin:0">Users & Roles</h2><button class="btn">Invite User</button></div>
+      <table>
+        <thead><tr><th>Name</th><th>Role</th><th>Location</th><th>Last Active</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>Amira Lee</td><td>Manager</td><td>Downtown</td><td>2 min ago</td><td><button class="btn">Edit</button></td></tr>
+          <tr><td>Ken Tan</td><td>Kitchen</td><td>Uptown</td><td>Now</td><td><button class="btn">Edit</button></td></tr>
+          <tr><td>Rafi Aziz</td><td>FOH</td><td>Campus</td><td>8 min ago</td><td><button class="btn">Edit</button></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Menu & Recipes (maps to menu_items, item_station_route, recipes) -->
+    <section id="menu" class="panel" style="margin-top:18px">
+      <div class="toolbar"><h2 style="margin:0">Menu & Recipes</h2><button class="btn">Add Menu Item</button></div>
+      <table>
+        <thead><tr><th>SKU</th><th>Item</th><th>Stations Route</th><th>Avg Prep</th><th>Recipe</th></tr></thead>
+        <tbody>
+          <tr><td>MK-001</td><td>Salmon Maki</td><td>Maki → Expo</td><td>7m</td><td><a href="#">View</a></td></tr>
+          <tr><td>GR-101</td><td>Beef Ramen</td><td>Grill → Broth → Expo</td><td>11m</td><td><a href="#">View</a></td></tr>
+          <tr><td>SD-215</td><td>Seaweed Salad</td><td>Cold → Expo</td><td>4m</td><td><a href="#">View</a></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Stations & SLA (maps to stations, station_sla) -->
+    <section id="stations" class="panel" style="margin-top:18px">
+      <div class="toolbar"><h2 style="margin:0">Stations & SLA</h2><button class="btn">Add Station</button></div>
+      <table>
+        <thead><tr><th>Station</th><th>Daypart</th><th>Target SLA</th><th>Alert at</th><th>Current Load</th></tr></thead>
+        <tbody>
+          <tr><td>Maki</td><td>Lunch</td><td>7m</td><td>+3m</td><td><div class="progress"><div class="bar" style="width:72%"></div></div></td></tr>
+          <tr><td>Grill</td><td>Dinner</td><td>9m</td><td>+2m</td><td><div class="progress"><div class="bar" style="width:58%"></div></div></td></tr>
+          <tr><td>Expo</td><td>All</td><td>3m</td><td>+1m</td><td><div class="progress"><div class="bar" style="width:34%"></div></div></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Inventory (maps to inventory_levels, waste_events, inventory_counts) -->
+    <section id="stock" class="panel" style="margin-top:18px">
+      <div class="toolbar"><h2 style="margin:0">Inventory & Counts</h2><button class="btn">Start Count</button></div>
+      <table>
+        <thead><tr><th>Ingredient</th><th>On-hand</th><th>Par</th><th>Expires</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Salmon Fillet (kg)</td><td>6.2</td><td>8.0</td><td>Fri</td><td><span class="status s-warn">Below Par</span></td></tr>
+          <tr><td>Nori Sheets (100s)</td><td>12</td><td>18</td><td>—</td><td><span class="status s-bad">Critical</span></td></tr>
+          <tr><td>Udon (packs)</td><td>31</td><td>24</td><td>Aug 30</td><td><span class="status s-good">OK</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Purchasing (maps to purchase_orders, goods_receipts) -->
+    <section id="purchasing" class="panel" style="margin-top:18px">
+      <div class="toolbar"><h2 style="margin:0">Purchasing</h2><button class="btn">New PO</button></div>
+      <table>
+        <thead><tr><th>PO #</th><th>Supplier</th><th>Status</th><th>ETA</th><th>Total</th></tr></thead>
+        <tbody>
+          <tr><td>PO-1042</td><td>SushiMart</td><td><span class="status s-warn">Sent</span></td><td>Tomorrow</td><td>$412.60</td></tr>
+          <tr><td>PO-1041</td><td>BlueSea Co.</td><td><span class="status s-good">Received</span></td><td>Today</td><td>$1,128.00</td></tr>
+          <tr><td>PO-1039</td><td>NoodleWorks</td><td><span class="status s-bad">Late</span></td><td>+2 days</td><td>$280.00</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Forecast & Prep (maps to demand_forecasts, prep_plans, prep_plan_lines) -->
+    <section id="forecast" class="panel" style="margin-top:18px">
+      <h2 style="margin-top:0">Demand Forecast & Prep Plans (GenAI)</h2>
+      <div class="grid-2">
+        <div>
+          <p class="muted">Predicted items by hour for Downtown.</p>
+          <table>
+            <thead><tr><th>Hour</th><th>Top Items</th><th>Expected Orders</th></tr></thead>
+            <tbody>
+              <tr><td>12:00–13:00</td><td>Salmon Maki, Beef Ramen</td><td>96</td></tr>
+              <tr><td>13:00–14:00</td><td>Udon, Salmon Maki</td><td>84</td></tr>
+              <tr><td>18:00–19:00</td><td>Beef Ramen, Seaweed Salad</td><td>112</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <p class="muted">Prep recommendations for Lunch (start times & qty).</p>
+          <table>
+            <thead><tr><th>Dish</th><th>Start</th><th>Qty</th><th>Why</th></tr></thead>
+            <tbody>
+              <tr><td>Salmon Maki</td><td>11:30</td><td>40 rolls</td><td>Forecast peak 12:15; keep warmers at 60%</td></tr>
+              <tr><td>Udon</td><td>11:20</td><td>25 portions</td><td>Tour group booking at 12:10</td></tr>
+              <tr><td>Seaweed Salad</td><td>11:10</td><td>18 bowls</td><td>Low prep time, batch at expo</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- KPIs (maps to service_periods) -->
+    <section id="kpi" class="panel" style="margin:18px 0 24px">
+      <h2 style="margin:0">Service KPIs (Today)</h2>
+      <table>
+        <thead><tr><th>Daypart</th><th>Orders</th><th>Items</th><th>Avg Wait</th><th>On-time %</th><th>Waste</th></tr></thead>
+        <tbody>
+          <tr><td>Lunch</td><td>214</td><td>401</td><td>8.9m</td><td>93.4%</td><td>$112</td></tr>
+          <tr><td>Dinner</td><td>178</td><td>355</td><td>9.8m</td><td>90.7%</td><td>$124</td></tr>
+        </tbody>
+      </table>
+      <footer>Data aggregates from <code>orders</code>, <code>kds_tickets</code>, <code>waste_events</code> into <code>service_periods</code>.</footer>
+    </section>
+
+    <footer class="muted">Mock UI – replace the tables with live API/DB calls when you wire your backend.</footer>
+  </main>
+</div>
+
+<script>
+  // Small UX helpers – no frameworks
+  const navLinks=[...document.querySelectorAll('aside nav a')];
+  navLinks.forEach(a=>a.addEventListener('click',e=>{
+    navLinks.forEach(x=>x.classList.remove('active'));
+    e.target.classList.add('active');
+  }));
+
+  // Demo actions
+  document.getElementById('ackBtn').addEventListener('click',()=>{
+    // Here you would PATCH /alerts to set acknowledged=true
+    alert('Alerts acknowledged (demo).');
+  });
+
+  // Example: filter alerts (pretend backend side)
+  document.querySelectorAll('[data-action]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      alert('Demo action: ' + btn.dataset.action);
+    });
+  });
+</script>
+</body>
+</html>
