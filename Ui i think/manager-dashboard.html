@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Talasco Kitchen AI – Manager Dashboard</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#111827; --text:#e5e7eb; --sub:#94a3b8;
+    --brand:#22d3ee; --accent:#a78bfa; --good:#10b981; --warn:#f59e0b; --bad:#ef4444;
+    --border:#1f2937; --chip:#334155; --shadow:0 10px 30px rgba(0,0,0,.35); --r:14px;
+    --gradient-primary: linear-gradient(135deg, var(--brand), var(--accent));
+    --gradient-card: linear-gradient(180deg, rgba(167,139,250,.05), rgba(34,211,238,.06));
+  }
+  *{box-sizing:border-box} 
+  body{
+    margin:0;background:linear-gradient(135deg, #0b1220 0%, #1e1b4b 100%);
+    color:var(--text);font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+    min-height:100vh;
+  }
+  a{color:var(--brand);text-decoration:none}
+  
+  /* Header */
+  .header{
+    background:linear-gradient(135deg, rgba(34,211,238,.1), rgba(167,139,250,.1));
+    backdrop-filter:blur(20px);border-bottom:1px solid var(--border);
+    padding:1rem 2rem;position:sticky;top:0;z-index:100;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .header-left{display:flex;align-items:center;gap:1rem}
+  .logo{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+    background:var(--gradient-primary);color:#051019;font-weight:800;font-size:1.2rem}
+  .header-title h1{margin:0;font-size:1.5rem;background:var(--gradient-primary);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .header-title p{margin:0;color:var(--sub);font-size:.9rem}
+  .header-right{display:flex;gap:1rem;align-items:center}
+  
+  /* Main Layout */
+  .main-container{padding:2rem;max-width:1400px;margin:0 auto}
+  
+  /* KPI Cards */
+  .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:2rem;margin-bottom:2rem}
+  .kpi-card{
+    background:var(--gradient-card),#0b1220;border:1px solid var(--border);
+    border-radius:var(--r);padding:2rem;box-shadow:var(--shadow);
+    position:relative;overflow:hidden;transition:transform .3s ease;
+    backdrop-filter:blur(10px);
+  }
+  .kpi-card:hover{transform:translateY(-4px);box-shadow:0 15px 40px rgba(0,0,0,.4)}
+  .kpi-card::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:4px;
+    background:var(--gradient-primary);
+  }
+  .kpi-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+  .kpi-title{color:#cbd5e1;font-size:.9rem;text-transform:uppercase;letter-spacing:.1em;font-weight:600}
+  .kpi-icon{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+    background:rgba(34,211,238,.15);color:var(--brand);font-size:1.2rem;
+    border:1px solid rgba(34,211,238,.3);}
+  .kpi-value{font-size:2.5rem;font-weight:800;margin:.5rem 0;background:var(--gradient-primary);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .kpi-trend{display:flex;align-items:center;gap:.5rem;font-size:.85rem}
+  .trend-up{color:var(--good)} .trend-down{color:var(--bad)} .trend-neutral{color:var(--sub)}
+  .kpi-subtitle{color:var(--sub);font-size:.85rem;margin-top:.5rem}
+  
+  /* Alert System */
+  .alert-banner{
+    background:linear-gradient(135deg, rgba(239,68,68,.1), rgba(245,158,11,.1));
+    border:1px solid rgba(239,68,68,.3);border-radius:var(--r);
+    padding:1.5rem;margin-bottom:2rem;display:flex;gap:1.5rem;align-items:center;
+    animation:pulse 2s infinite;backdrop-filter:blur(10px);
+    box-shadow:0 8px 32px rgba(239,68,68,.2);
+  }
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.9}}
+  .alert-icon{width:50px;height:50px;border-radius:50%;background:rgba(239,68,68,.2);
+    display:grid;place-items:center;color:var(--bad);font-size:1.5rem;
+    border:2px solid rgba(239,68,68,.4);}
+  .alert-content{flex:1}
+  .alert-title{font-weight:800;color:#fca5a5;margin:0 0 .5rem;font-size:1.2rem}
+  .alert-message{color:var(--text);margin:0;font-size:1rem;line-height:1.5}
+  .alert-actions{display:flex;gap:.75rem}
+  
+  /* Content Grid */
+  .content-grid{display:grid;grid-template-columns:2fr 1fr;gap:2rem;margin-bottom:2rem}
+  @media (max-width:1024px){.content-grid{grid-template-columns:1fr}}
+  
+  /* Panels */
+  .panel{
+    background:var(--gradient-card),#0b1220;border:1px solid var(--border);
+    border-radius:var(--r);padding:1.5rem;box-shadow:var(--shadow);
+  }
+  .panel-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem}
+  .panel-title{font-size:1.25rem;font-weight:700;margin:0;color:#cbd5e1}
+  .panel-actions{display:flex;gap:.5rem}
+  
+  /* Buttons */
+  .btn{
+    padding:.75rem 1rem;border-radius:8px;border:none;font-weight:600;
+    cursor:pointer;transition:all .2s ease;font-size:.875rem;
+    display:inline-flex;align-items:center;gap:.5rem;
+  }
+  .btn-primary{background:var(--gradient-primary);color:#051019;box-shadow:0 4px 15px rgba(34,211,238,.3)}
+  .btn-secondary{background:var(--chip);color:var(--text);border:1px solid var(--border)}
+  .btn-danger{background:rgba(239,68,68,.2);color:var(--bad);border:1px solid rgba(239,68,68,.3);
+    box-shadow:0 4px 15px rgba(239,68,68,.2)}
+  .btn:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.4)}
+  
+  /* Tables */
+  .table-container{overflow-x:auto;border-radius:8px;border:1px solid var(--border)}
+  table{width:100%;border-collapse:collapse;font-size:.9rem}
+  th,td{padding:1rem;text-align:left;border-bottom:1px solid var(--border)}
+  th{background:rgba(34,211,238,.05);color:#cbd5e1;font-weight:600;text-transform:uppercase;
+    font-size:.75rem;letter-spacing:.05em}
+  tr:hover{background:rgba(34,211,238,.02)}
+  
+  /* Status Badges */
+  .status{
+    display:inline-flex;align-items:center;gap:.25rem;padding:.25rem .75rem;
+    border-radius:999px;font-size:.75rem;font-weight:600;text-transform:uppercase;
+    letter-spacing:.05em;
+  }
+  .status-good{background:rgba(16,185,129,.15);color:var(--good);border:1px solid rgba(16,185,129,.3)}
+  .status-warn{background:rgba(245,158,11,.15);color:var(--warn);border:1px solid rgba(245,158,11,.3)}
+  .status-bad{background:rgba(239,68,68,.15);color:var(--bad);border:1px solid rgba(239,68,68,.3)}
+  .status-info{background:rgba(34,211,238,.15);color:var(--brand);border:1px solid rgba(34,211,238,.3)}
+  
+  /* Progress Bars */
+  .progress{height:8px;background:#111827;border-radius:999px;overflow:hidden;margin:.5rem 0}
+  .progress-bar{height:100%;background:var(--gradient-primary);transition:width .3s ease}
+  
+  /* SLA Dashboard */
+  .sla-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.5rem;margin-top:1.5rem}
+  .sla-card{
+    background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.3);
+    border-radius:12px;padding:1.5rem;text-align:center;
+    transition:transform .2s ease;backdrop-filter:blur(5px);
+  }
+  .sla-card:hover{transform:translateY(-2px);background:rgba(34,211,238,.12)}
+  .sla-station{font-weight:600;color:#cbd5e1;margin-bottom:.5rem}
+  .sla-time{font-size:1.5rem;font-weight:800;margin:.25rem 0}
+  .sla-status{font-size:.75rem;margin-top:.5rem}
+  
+  /* Live Orders */
+  .order-item{
+    display:flex;justify-content:space-between;align-items:center;padding:1.25rem;
+    background:rgba(34,211,238,.03);border:1px solid rgba(34,211,238,.15);
+    border-radius:12px;margin-bottom:.75rem;transition:all .3s ease;
+    backdrop-filter:blur(5px);
+  }
+  .order-item:hover{background:rgba(34,211,238,.08);border-color:rgba(34,211,238,.3);
+    transform:translateX(4px);box-shadow:0 4px 15px rgba(34,211,238,.1)}
+  .order-info{flex:1}
+  .order-number{font-weight:700;color:var(--brand);margin-bottom:.25rem}
+  .order-details{color:var(--sub);font-size:.85rem}
+  .order-time{color:var(--warn);font-weight:600}
+  
+  /* Inventory Alerts */
+  .inventory-alert{
+    display:flex;justify-content:space-between;align-items:center;padding:1rem;
+    background:rgba(239,68,68,.08);border-left:4px solid var(--bad);
+    border-radius:8px;margin-bottom:.75rem;transition:all .2s ease;
+    backdrop-filter:blur(5px);
+  }
+  .inventory-alert:hover{background:rgba(239,68,68,.12);transform:translateX(2px)}
+  .alert-item{font-weight:600;color:#cbd5e1}
+  .alert-level{font-size:.75rem;padding:.25rem .5rem;border-radius:4px}
+  .alert-critical{background:rgba(239,68,68,.2);color:var(--bad)}
+  .alert-low{background:rgba(245,158,11,.2);color:var(--warn)}
+  
+  /* Responsive */
+  @media (max-width:768px){
+    .header{padding:1rem}
+    .main-container{padding:1rem}
+    .kpi-grid{grid-template-columns:1fr}
+    .content-grid{grid-template-columns:1fr;gap:1rem}
+    .panel{padding:1rem}
+  }
+</style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">🍳</div>
+      <div class="header-title">
+        <h1>Manager Dashboard</h1>
+        <p>Service Operations & Performance Monitoring</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div style="text-align:right">
+        <div style="font-weight:700;color:#cbd5e1;font-size:1.1rem">Amira Lee</div>
+        <div style="font-size:.9rem;color:var(--sub)">Downtown Location Manager</div>
+      </div>
+      <button class="btn btn-secondary">⚙️ Settings</button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <div class="main-container">
+    
+    <!-- Critical Alert Banner -->
+    <div class="alert-banner">
+      <div class="alert-icon">⚠️</div>
+      <div class="alert-content">
+        <div class="alert-title">Service Alert</div>
+        <div class="alert-message">Table 14 orders are 4 minutes over SLA. Kitchen staff needs immediate attention.</div>
+      </div>
+      <div class="alert-actions">
+        <button class="btn btn-danger">🚨 Escalate</button>
+        <button class="btn btn-primary">✅ Resolve</button>
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <div class="kpi-title">On-Time Orders</div>
+          <div class="kpi-icon">⏱️</div>
+        </div>
+        <div class="kpi-value">92%</div>
+        <div class="kpi-trend">
+          <span class="trend-up">↗️ +4.3%</span>
+          <span>vs yesterday</span>
+        </div>
+        <div class="kpi-subtitle">Target: 95% | Current SLA performance</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <div class="kpi-title">Avg Wait Time</div>
+          <div class="kpi-icon">⏰</div>
+        </div>
+        <div class="kpi-value">9.4m</div>
+        <div class="kpi-trend">
+          <span class="trend-down">↘️ -1.2m</span>
+          <span>vs yesterday</span>
+        </div>
+        <div class="kpi-subtitle">Target: 8m | Dine-in & delivery</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <div class="kpi-title">Active Orders</div>
+          <div class="kpi-icon">📋</div>
+        </div>
+        <div class="kpi-value">24</div>
+        <div class="kpi-trend">
+          <span class="trend-neutral">→</span>
+          <span>12 in kitchen</span>
+        </div>
+        <div class="kpi-subtitle">Peak: 31 | Current workload</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <div class="kpi-title">Low Stock Items</div>
+          <div class="kpi-icon">📦</div>
+        </div>
+        <div class="kpi-value">7</div>
+        <div class="kpi-trend">
+          <span class="status-bad">3 Critical</span>
+        </div>
+        <div class="kpi-subtitle">Need immediate restocking</div>
+      </div>
+    </div>
+
+    <!-- Content Grid -->
+    <div class="content-grid">
+      
+      <!-- Left Column: Service Operations -->
+      <div>
+        
+        <!-- Live Orders & SLA Status -->
+        <div class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title">Live Service Operations</h2>
+            <div class="panel-actions">
+              <button class="btn btn-secondary">🔄 Refresh</button>
+              <button class="btn btn-primary">⚙️ SLA Settings</button>
+            </div>
+          </div>
+          
+          <!-- Station SLA Status -->
+          <div class="sla-grid">
+            <div class="sla-card">
+              <div class="sla-station">Maki Station</div>
+              <div class="sla-time">7.2m</div>
+              <div class="sla-status status-warn">+0.2m over</div>
+              <div class="progress"><div class="progress-bar" style="width:85%"></div></div>
+            </div>
+            <div class="sla-card">
+              <div class="sla-station">Grill Station</div>
+              <div class="sla-time">8.1m</div>
+              <div class="sla-status status-good">On track</div>
+              <div class="progress"><div class="progress-bar" style="width:65%"></div></div>
+            </div>
+            <div class="sla-card">
+              <div class="sla-station">Expo Station</div>
+              <div class="sla-time">2.8m</div>
+              <div class="sla-status status-good">Excellent</div>
+              <div class="progress"><div class="progress-bar" style="width:40%"></div></div>
+            </div>
+          </div>
+
+          <!-- Recent Orders -->
+          <h3 style="margin:1.5rem 0 1rem;color:#cbd5e1;font-size:1rem">Recent Orders</h3>
+          <div class="order-item">
+            <div class="order-info">
+              <div class="order-number">Order #1423 - Table 14</div>
+              <div class="order-details">2× Beef Ramen, 1× Seaweed Salad</div>
+            </div>
+            <div class="order-time">+4m over SLA</div>
+          </div>
+          <div class="order-item">
+            <div class="order-info">
+              <div class="order-number">Order #1424 - Table 8</div>
+              <div class="order-details">3× Salmon Maki, 2× Udon</div>
+            </div>
+            <div style="color:var(--good)">On track</div>
+          </div>
+          <div class="order-item">
+            <div class="order-info">
+              <div class="order-number">Order #1425 - Delivery</div>
+              <div class="order-details">1× Dragon Roll, 1× Tempura</div>
+            </div>
+            <div style="color:var(--good)">Ready</div>
+          </div>
+        </div>
+
+        <!-- Inventory Alerts -->
+        <div class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title">Inventory Alerts</h2>
+            <div class="panel-actions">
+              <button class="btn btn-primary">📝 Create PO</button>
+            </div>
+          </div>
+          
+          <div class="inventory-alert">
+            <div class="alert-item">Nori Sheets (100s)</div>
+            <div class="alert-level alert-critical">Critical: 12 left</div>
+          </div>
+          <div class="inventory-alert">
+            <div class="alert-item">Salmon Fillet (kg)</div>
+            <div class="alert-level alert-low">Low: 6.2kg</div>
+          </div>
+          <div class="inventory-alert">
+            <div class="alert-item">Udon Noodles (packs)</div>
+            <div class="alert-level alert-low">Low: 31 packs</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Alerts & Quick Actions -->
+      <div>
+        
+        <!-- Active Alerts -->
+        <div class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title">Active Alerts</h2>
+            <div class="panel-actions">
+              <button class="btn btn-secondary">🔕 Mute All</button>
+            </div>
+          </div>
+          
+          <div style="space-y:.75rem">
+            <div style="padding:.75rem;background:rgba(239,68,68,.05);border-left:3px solid var(--bad);border-radius:6px;margin-bottom:.5rem">
+              <div style="font-weight:600;color:var(--bad);margin-bottom:.25rem">SLA Breach</div>
+              <div style="font-size:.85rem;color:var(--text)">Table 14: 2× Beef Ramen is 4m over Grill SLA</div>
+              <div style="font-size:.75rem;color:var(--sub);margin-top:.25rem">12:08 PM</div>
+            </div>
+            
+            <div style="padding:.75rem;background:rgba(245,158,11,.05);border-left:3px solid var(--warn);border-radius:6px;margin-bottom:.5rem">
+              <div style="font-weight:600;color:var(--warn);margin-bottom:.25rem">Station Overload</div>
+              <div style="font-size:.85rem;color:var(--text)">Maki station at 185% capacity</div>
+              <div style="font-size:.75rem;color:var(--sub);margin-top:.25rem">11:55 AM</div>
+            </div>
+            
+            <div style="padding:.75rem;background:rgba(34,211,238,.05);border-left:3px solid var(--brand);border-radius:6px;margin-bottom:.5rem">
+              <div style="font-weight:600;color:var(--brand);margin-bottom:.25rem">Stock Alert</div>
+              <div style="font-size:.85rem;color:var(--text)">Nori Sheets below par level</div>
+              <div style="font-size:.75rem;color:var(--sub);margin-top:.25rem">11:30 AM</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title">Quick Actions</h2>
+          </div>
+          
+          <div style="display:grid;gap:.75rem">
+            <button class="btn btn-primary" style="justify-content:flex-start">
+              📊 View Full Report
+            </button>
+            <button class="btn btn-secondary" style="justify-content:flex-start">
+              👥 Manage Staff
+            </button>
+            <button class="btn btn-secondary" style="justify-content:flex-start">
+              📦 Inventory Count
+            </button>
+            <button class="btn btn-secondary" style="justify-content:flex-start">
+              🛒 Create Purchase Order
+            </button>
+            <button class="btn btn-secondary" style="justify-content:flex-start">
+              📈 Performance Analytics
+            </button>
+            <button class="btn btn-secondary" style="justify-content:flex-start">
+              ⚙️ SLA Configuration
+            </button>
+          </div>
+        </div>
+
+        <!-- Staff Status -->
+        <div class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title">Staff Status</h2>
+          </div>
+          
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr><th>Name</th><th>Role</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Ken Tan</td>
+                  <td>Kitchen</td>
+                  <td><span class="status status-good">Active</span></td>
+                </tr>
+                <tr>
+                  <td>Rafi Aziz</td>
+                  <td>Front of House</td>
+                  <td><span class="status status-good">Active</span></td>
+                </tr>
+                <tr>
+                  <td>Lisa Wang</td>
+                  <td>Kitchen</td>
+                  <td><span class="status status-warn">Break</span></td>
+                </tr>
+                <tr>
+                  <td>Mike Chen</td>
+                  <td>Front of House</td>
+                  <td><span class="status status-good">Active</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Section: Performance Summary -->
+    <div class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">Today's Performance Summary</h2>
+        <div class="panel-actions">
+          <button class="btn btn-secondary">📊 Detailed Report</button>
+        </div>
+      </div>
+      
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr><th>Metric</th><th>Current</th><th>Target</th><th>Trend</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>On-time Orders</td>
+              <td>92%</td>
+              <td>95%</td>
+              <td><span class="trend-up">+4.3%</span></td>
+              <td><span class="status status-warn">Below Target</span></td>
+            </tr>
+            <tr>
+              <td>Average Wait Time</td>
+              <td>9.4m</td>
+              <td>8.0m</td>
+              <td><span class="trend-down">-1.2m</span></td>
+              <td><span class="status status-warn">Above Target</span></td>
+            </tr>
+            <tr>
+              <td>Kitchen Efficiency</td>
+              <td>87%</td>
+              <td>85%</td>
+              <td><span class="trend-up">+2.1%</span></td>
+              <td><span class="status status-good">Exceeding</span></td>
+            </tr>
+            <tr>
+              <td>Customer Satisfaction</td>
+              <td>4.6/5</td>
+              <td>4.5/5</td>
+              <td><span class="trend-up">+0.1</span></td>
+              <td><span class="status status-good">Exceeding</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Real-time updates simulation
+    function updateKPIs() {
+      // Simulate real-time data updates
+      const kpiValues = document.querySelectorAll('.kpi-value');
+      kpiValues.forEach(value => {
+        if (value.textContent.includes('%')) {
+          // Animate percentage changes
+          const current = parseInt(value.textContent);
+          const change = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
+          const newValue = Math.max(0, Math.min(100, current + change));
+          value.textContent = newValue + '%';
+        }
+      });
+    }
+
+    // Update every 30 seconds
+    setInterval(updateKPIs, 30000);
+
+    // Alert acknowledgment
+    document.querySelectorAll('.alert-banner .btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const banner = btn.closest('.alert-banner');
+        banner.style.opacity = '0.5';
+        banner.style.transform = 'scale(0.98)';
+        setTimeout(() => {
+          banner.style.display = 'none';
+        }, 300);
+      });
+    });
+
+    // Quick action handlers
+    document.querySelectorAll('.btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        if (btn.textContent.includes('View Full Report')) {
+          alert('Opening detailed performance report...');
+        } else if (btn.textContent.includes('Manage Staff')) {
+          alert('Opening staff management panel...');
+        } else if (btn.textContent.includes('Create Purchase Order')) {
+          alert('Opening purchase order creation...');
+        }
+      });
+    });
+  </script>
+</body>
+</html>

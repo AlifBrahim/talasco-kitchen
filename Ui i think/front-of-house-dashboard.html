@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Talasco Kitchen AI – Front of House Dashboard</title>
+<style>
+  :root{
+    --bg-dark:#0f1419; --bg-main:#1e2329; --bg-card:#2d3748;
+    --text-bright:#ffffff; --text-muted:#a0aec0; --text-subtle:#718096;
+    --accent-green:#48bb78; --accent-yellow:#ed8936; --accent-red:#f56565; --accent-blue:#4299e1;
+    --accent-purple:#9f7aea; --accent-pink:#ed64a6;
+    --border-subtle:#4a5568; --border-bright:#718096;
+    --shadow-soft:0 4px 6px -1px rgba(0,0,0,0.3); --shadow-medium:0 10px 15px -3px rgba(0,0,0,0.4);
+    --radius:12px; --radius-sm:8px;
+  }
+  
+  *{box-sizing:border-box;margin:0;padding:0}
+  
+  body{
+    background:linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-main) 100%);
+    color:var(--text-bright);font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+    min-height:100vh;overflow-x:hidden;
+  }
+  
+  /* HEADER */
+  .header{
+    background:var(--bg-card);border-bottom:2px solid var(--border-bright);
+    padding:1rem 2rem;display:flex;justify-content:space-between;align-items:center;
+    box-shadow:var(--shadow-medium);
+  }
+  
+  .header-left{
+    display:flex;align-items:center;gap:1rem;
+  }
+  
+  .foh-icon{
+    width:50px;height:50px;background:var(--accent-blue);
+    border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;
+    font-size:1.5rem;color:white;font-weight:bold;
+  }
+  
+  .header-info h1{
+    font-size:1.8rem;font-weight:bold;color:var(--text-bright);
+    margin-bottom:0.25rem;
+  }
+  
+  .header-info p{
+    color:var(--text-muted);font-size:1rem;
+  }
+  
+  .header-right{
+    display:flex;align-items:center;gap:2rem;
+  }
+  
+  .current-time{
+    font-size:1.5rem;font-weight:bold;color:var(--accent-blue);
+  }
+  
+  .staff-info{
+    text-align:right;
+  }
+  
+  .staff-name{
+    color:var(--text-bright);font-weight:bold;font-size:1.1rem;
+  }
+  
+  .staff-role{
+    color:var(--text-muted);font-size:0.9rem;
+  }
+  
+  /* MAIN LAYOUT */
+  .main-content{
+    padding:2rem;max-width:1400px;margin:0 auto;
+  }
+  
+  .content-grid{
+    display:grid;grid-template-columns:1fr 1fr 350px;gap:2rem;
+  }
+  
+  @media (max-width:1200px){
+    .content-grid{grid-template-columns:1fr 1fr;gap:1.5rem}
+  }
+  
+  @media (max-width:768px){
+    .content-grid{grid-template-columns:1fr;gap:1rem}
+  }
+  
+  /* SECTION STYLES */
+  .section{
+    background:var(--bg-card);border-radius:var(--radius);padding:1.5rem;
+    box-shadow:var(--shadow-soft);border:1px solid var(--border-subtle);
+  }
+  
+  .section-title{
+    font-size:1.3rem;font-weight:bold;color:var(--text-bright);
+    margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;
+  }
+  
+  .section-title::before{
+    font-size:1.1rem;
+  }
+  
+  /* TABLE STATUS SECTION */
+  .tables-title::before{content:"🍽️"}
+  
+  .tables-grid{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:1rem;
+  }
+  
+  .table-card{
+    background:var(--bg-main);border:2px solid var(--border-subtle);
+    border-radius:var(--radius-sm);padding:1rem;text-align:center;
+    transition:all 0.3s ease;cursor:pointer;position:relative;
+  }
+  
+  .table-card:hover{
+    transform:translateY(-2px);box-shadow:var(--shadow-medium);
+  }
+  
+  .table-card.occupied{
+    border-color:var(--accent-yellow);background:rgba(237,137,54,0.1);
+  }
+  
+  .table-card.ready{
+    border-color:var(--accent-green);background:rgba(72,187,120,0.1);
+  }
+  
+  .table-card.overdue{
+    border-color:var(--accent-red);background:rgba(245,101,101,0.1);
+    animation:pulse-red 2s infinite;
+  }
+  
+  @keyframes pulse-red{
+    0%,100%{border-color:var(--accent-red)}
+    50%{border-color:#ff6b6b}
+  }
+  
+  .table-number{
+    font-size:1.5rem;font-weight:bold;color:var(--text-bright);
+    margin-bottom:0.5rem;
+  }
+  
+  .table-status{
+    font-size:0.85rem;font-weight:bold;padding:0.25rem 0.5rem;
+    border-radius:var(--radius-sm);color:white;
+  }
+  
+  .status-occupied{background:var(--accent-yellow)}
+  .status-ready{background:var(--accent-green)}
+  .status-overdue{background:var(--accent-red)}
+  .status-empty{background:var(--text-subtle)}
+  
+  .table-time{
+    font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem;
+  }
+  
+  /* ACTIVE ORDERS SECTION */
+  .orders-title::before{content:"📋"}
+  
+  .order-item{
+    background:var(--bg-main);border:1px solid var(--border-subtle);
+    border-radius:var(--radius-sm);padding:1rem;margin-bottom:0.75rem;
+    transition:all 0.2s ease;
+  }
+  
+  .order-item:hover{
+    border-color:var(--accent-blue);background:rgba(66,153,225,0.05);
+  }
+  
+  .order-header{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-bottom:0.5rem;
+  }
+  
+  .order-number{
+    font-weight:bold;color:var(--accent-blue);font-size:1.1rem;
+  }
+  
+  .order-time{
+    font-size:0.9rem;padding:0.25rem 0.5rem;border-radius:var(--radius-sm);
+    font-weight:bold;color:white;
+  }
+  
+  .order-time.on-time{background:var(--accent-green)}
+  .order-time.warning{background:var(--accent-yellow)}
+  .order-time.overdue{background:var(--accent-red)}
+  
+  .order-items{
+    color:var(--text-muted);font-size:0.9rem;margin-bottom:0.5rem;
+  }
+  
+  .order-actions{
+    display:flex;gap:0.5rem;margin-top:0.5rem;
+  }
+  
+  /* CUSTOMER ALERTS SECTION */
+  .alerts-title::before{content:"🚨"}
+  
+  .alert-item{
+    background:var(--bg-main);border-left:4px solid;border-radius:var(--radius-sm);
+    padding:1rem;margin-bottom:0.75rem;
+  }
+  
+  .alert-item.urgent{
+    border-left-color:var(--accent-red);background:rgba(245,101,101,0.1);
+  }
+  
+  .alert-item.warning{
+    border-left-color:var(--accent-yellow);background:rgba(237,137,54,0.1);
+  }
+  
+  .alert-item.info{
+    border-left-color:var(--accent-blue);background:rgba(66,153,225,0.1);
+  }
+  
+  .alert-message{
+    font-weight:bold;margin-bottom:0.25rem;
+  }
+  
+  .alert-time{
+    font-size:0.8rem;color:var(--text-subtle);
+  }
+  
+  /* BUTTONS */
+  .btn{
+    padding:0.5rem 1rem;border:none;border-radius:var(--radius-sm);
+    font-weight:bold;cursor:pointer;transition:all 0.2s ease;
+    font-size:0.85rem;display:inline-flex;align-items:center;gap:0.25rem;
+  }
+  
+  .btn-primary{
+    background:var(--accent-blue);color:white;
+  }
+  
+  .btn-primary:hover{background:#3182ce;transform:translateY(-1px)}
+  
+  .btn-success{
+    background:var(--accent-green);color:white;
+  }
+  
+  .btn-success:hover{background:#38a169;transform:translateY(-1px)}
+  
+  .btn-warning{
+    background:var(--accent-yellow);color:white;
+  }
+  
+  .btn-warning:hover{background:#dd6b20;transform:translateY(-1px)}
+  
+  .btn-danger{
+    background:var(--accent-red);color:white;
+  }
+  
+  .btn-danger:hover{background:#e53e3e;transform:translateY(-1px)}
+  
+  .btn-secondary{
+    background:var(--bg-main);color:var(--text-bright);
+    border:1px solid var(--border-subtle);
+  }
+  
+  .btn-secondary:hover{
+    background:var(--border-subtle);border-color:var(--border-bright);
+  }
+  
+  /* QUICK ACTIONS PANEL */
+  .actions-title::before{content:"⚡"}
+  
+  .action-grid{
+    display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;
+  }
+  
+  .action-btn{
+    padding:1rem;background:var(--bg-main);border:2px solid var(--border-subtle);
+    border-radius:var(--radius-sm);color:var(--text-bright);
+    font-weight:bold;cursor:pointer;transition:all 0.2s ease;
+    display:flex;flex-direction:column;align-items:center;gap:0.5rem;
+    text-align:center;
+  }
+  
+  .action-btn:hover{
+    border-color:var(--accent-blue);background:rgba(66,153,225,0.1);
+    transform:translateY(-1px);
+  }
+  
+  .action-icon{
+    font-size:1.5rem;
+  }
+  
+  .action-text{
+    font-size:0.85rem;
+  }
+  
+  /* STATUS SUMMARY */
+  .status-summary{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;
+    margin-bottom:1.5rem;
+  }
+  
+  .status-card{
+    background:var(--bg-main);border-radius:var(--radius-sm);padding:1rem;
+    text-align:center;border:1px solid var(--border-subtle);
+  }
+  
+  .status-number{
+    font-size:1.8rem;font-weight:bold;margin-bottom:0.25rem;
+  }
+  
+  .status-label{
+    font-size:0.8rem;color:var(--text-muted);text-transform:uppercase;
+    letter-spacing:0.05em;
+  }
+  
+  .status-number.occupied{color:var(--accent-yellow)}
+  .status-number.ready{color:var(--accent-green)}
+  .status-number.overdue{color:var(--accent-red)}
+  .status-number.empty{color:var(--text-subtle)}
+  
+  /* RESPONSIVE */
+  @media (max-width:768px){
+    .header{padding:1rem}
+    .main-content{padding:1rem}
+    .tables-grid{grid-template-columns:repeat(auto-fit,minmax(100px,1fr))}
+    .action-grid{grid-template-columns:1fr}
+    .status-summary{grid-template-columns:repeat(2,1fr)}
+  }
+  
+  /* ACCESSIBILITY */
+  .btn:focus,.action-btn:focus,.table-card:focus{
+    outline:2px solid var(--accent-blue);outline-offset:2px;
+  }
+</style>
+</head>
+<body>
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <div class="foh-icon">🍽️</div>
+      <div class="header-info">
+        <h1>Front of House Dashboard</h1>
+        <p>Downtown Location • Table Management</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="current-time" id="currentTime">12:34 PM</div>
+      <div class="staff-info">
+        <div class="staff-name">Rafi Aziz</div>
+        <div class="staff-role">Front of House</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+    
+    <!-- STATUS SUMMARY -->
+    <div class="status-summary">
+      <div class="status-card">
+        <div class="status-number occupied">8</div>
+        <div class="status-label">Occupied Tables</div>
+      </div>
+      <div class="status-card">
+        <div class="status-number ready">3</div>
+        <div class="status-label">Orders Ready</div>
+      </div>
+      <div class="status-card">
+        <div class="status-number overdue">1</div>
+        <div class="status-label">Overdue Orders</div>
+      </div>
+      <div class="status-card">
+        <div class="status-number empty">12</div>
+        <div class="status-label">Empty Tables</div>
+      </div>
+    </div>
+
+    <div class="content-grid">
+      
+      <!-- TABLE STATUS -->
+      <div class="section">
+        <h2 class="section-title tables-title">Table Status</h2>
+        
+        <div class="tables-grid">
+          <!-- Occupied Tables -->
+          <div class="table-card occupied" onclick="viewTableDetails(14)">
+            <div class="table-number">14</div>
+            <div class="table-status status-overdue">Overdue</div>
+            <div class="table-time">+4m waiting</div>
+          </div>
+          
+          <div class="table-card occupied" onclick="viewTableDetails(8)">
+            <div class="table-number">8</div>
+            <div class="table-status status-occupied">Ordering</div>
+            <div class="table-time">15 min</div>
+          </div>
+          
+          <div class="table-card occupied" onclick="viewTableDetails(12)">
+            <div class="table-number">12</div>
+            <div class="table-status status-occupied">Waiting</div>
+            <div class="table-time">8 min</div>
+          </div>
+          
+          <div class="table-card ready" onclick="viewTableDetails(5)">
+            <div class="table-number">5</div>
+            <div class="table-status status-ready">Ready</div>
+            <div class="table-time">2 min ago</div>
+          </div>
+          
+          <div class="table-card ready" onclick="viewTableDetails(7)">
+            <div class="table-number">7</div>
+            <div class="table-status status-ready">Ready</div>
+            <div class="table-time">1 min ago</div>
+          </div>
+          
+          <div class="table-card ready" onclick="viewTableDetails(11)">
+            <div class="table-number">11</div>
+            <div class="table-status status-ready">Ready</div>
+            <div class="table-time">Just ready</div>
+          </div>
+          
+          <!-- Empty Tables -->
+          <div class="table-card" onclick="viewTableDetails(1)">
+            <div class="table-number">1</div>
+            <div class="table-status status-empty">Empty</div>
+            <div class="table-time">Available</div>
+          </div>
+          
+          <div class="table-card" onclick="viewTableDetails(2)">
+            <div class="table-number">2</div>
+            <div class="table-status status-empty">Empty</div>
+            <div class="table-time">Available</div>
+          </div>
+          
+          <div class="table-card" onclick="viewTableDetails(3)">
+            <div class="table-number">3</div>
+            <div class="table-status status-empty">Empty</div>
+            <div class="table-time">Available</div>
+          </div>
+          
+          <div class="table-card" onclick="viewTableDetails(4)">
+            <div class="table-number">4</div>
+            <div class="table-status status-empty">Empty</div>
+            <div class="table-time">Available</div>
+          </div>
+          
+          <div class="table-card" onclick="viewTableDetails(6)">
+            <div class="table-number">6</div>
+            <div class="table-status status-empty">Empty</div>
+            <div class="table-time">Available</div>
+          </div>
+          
+          <div class="table-card" onclick="viewTableDetails(9)">
+            <div class="table-number">9</div>
+            <div class="table-status status-empty">Empty</div>
+            <div class="table-time">Available</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACTIVE ORDERS -->
+      <div class="section">
+        <h2 class="section-title orders-title">Active Orders</h2>
+        
+        <div class="order-item">
+          <div class="order-header">
+            <div class="order-number">#1423 - Table 14</div>
+            <div class="order-time overdue">+4m OVERDUE</div>
+          </div>
+          <div class="order-items">2× Beef Ramen, 1× Seaweed Salad</div>
+          <div class="order-actions">
+            <button class="btn btn-danger" onclick="escalateOrder(1423)">🚨 Escalate</button>
+            <button class="btn btn-warning" onclick="updateCustomer(14)">📞 Update Customer</button>
+          </div>
+        </div>
+        
+        <div class="order-item">
+          <div class="order-header">
+            <div class="order-number">#1424 - Table 8</div>
+            <div class="order-time warning">2m remaining</div>
+          </div>
+          <div class="order-items">3× Salmon Maki, 2× Udon Noodles</div>
+          <div class="order-actions">
+            <button class="btn btn-primary" onclick="checkOrder(1424)">👀 Check Status</button>
+          </div>
+        </div>
+        
+        <div class="order-item">
+          <div class="order-header">
+            <div class="order-number">#1425 - Table 12</div>
+            <div class="order-time on-time">8m remaining</div>
+          </div>
+          <div class="order-items">1× Dragon Roll, 1× Tempura</div>
+          <div class="order-actions">
+            <button class="btn btn-primary" onclick="checkOrder(1425)">👀 Check Status</button>
+          </div>
+        </div>
+        
+        <div class="order-item">
+          <div class="order-header">
+            <div class="order-number">#1426 - Table 5</div>
+            <div class="order-time on-time">Ready</div>
+          </div>
+          <div class="order-items">1× California Roll, 1× Miso Soup</div>
+          <div class="order-actions">
+            <button class="btn btn-success" onclick="serveOrder(1426)">🍽️ Mark Served</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SIDEBAR -->
+      <div>
+        
+        <!-- CUSTOMER ALERTS -->
+        <div class="section">
+          <h2 class="section-title alerts-title">Customer Alerts</h2>
+          
+          <div class="alert-item urgent">
+            <div class="alert-message">Table 14: Customer complaining about wait time</div>
+            <div class="alert-time">2 minutes ago</div>
+          </div>
+          
+          <div class="alert-item warning">
+            <div class="alert-message">Table 8: Order taking longer than expected</div>
+            <div class="alert-time">5 minutes ago</div>
+          </div>
+          
+          <div class="alert-item info">
+            <div class="alert-message">Table 5: Order ready for pickup</div>
+            <div class="alert-time">1 minute ago</div>
+          </div>
+          
+          <div class="alert-item info">
+            <div class="alert-message">New party of 4 seated at Table 3</div>
+            <div class="alert-time">3 minutes ago</div>
+          </div>
+        </div>
+
+        <!-- QUICK ACTIONS -->
+        <div class="section">
+          <h2 class="section-title actions-title">Quick Actions</h2>
+          
+          <div class="action-grid">
+            <button class="action-btn" onclick="takeOrder()">
+              <div class="action-icon">📝</div>
+              <div class="action-text">Take Order</div>
+            </button>
+            
+            <button class="action-btn" onclick="seatCustomers()">
+              <div class="action-icon">🪑</div>
+              <div class="action-text">Seat Customers</div>
+            </button>
+            
+            <button class="action-btn" onclick="checkKitchen()">
+              <div class="action-icon">👨‍🍳</div>
+              <div class="action-text">Check Kitchen</div>
+            </button>
+            
+            <button class="action-btn" onclick="processPayment()">
+              <div class="action-icon">💳</div>
+              <div class="action-text">Process Payment</div>
+            </button>
+            
+            <button class="action-btn" onclick="cleanTable()">
+              <div class="action-icon">🧹</div>
+              <div class="action-text">Clean Table</div>
+            </button>
+            
+            <button class="action-btn" onclick="callManager()">
+              <div class="action-icon">📞</div>
+              <div class="action-text">Call Manager</div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Real-time clock
+    function updateClock() {
+      const now = new Date();
+      const timeString = now.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+      document.getElementById('currentTime').textContent = timeString;
+    }
+    
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // Table management functions
+    function viewTableDetails(tableNumber) {
+      alert(`Opening details for Table ${tableNumber}`);
+    }
+
+    function takeOrder() {
+      alert('Opening order taking interface...');
+    }
+
+    function seatCustomers() {
+      alert('Opening table assignment...');
+    }
+
+    function cleanTable() {
+      alert('Marking table for cleaning...');
+    }
+
+    // Order management functions
+    function escalateOrder(orderNumber) {
+      if (confirm(`Escalate order #${orderNumber} to manager?`)) {
+        alert('Order escalated to manager!');
+      }
+    }
+
+    function updateCustomer(tableNumber) {
+      alert(`Calling customer at Table ${tableNumber} to provide update...`);
+    }
+
+    function checkOrder(orderNumber) {
+      alert(`Checking status of order #${orderNumber}...`);
+    }
+
+    function serveOrder(orderNumber) {
+      if (confirm(`Mark order #${orderNumber} as served?`)) {
+        alert('Order marked as served!');
+        // Remove from active orders
+        const orderElement = document.querySelector(`[onclick*="${orderNumber}"]`).closest('.order-item');
+        if (orderElement) {
+          orderElement.style.opacity = '0.5';
+          orderElement.style.transform = 'scale(0.98)';
+          setTimeout(() => {
+            orderElement.remove();
+            updateOrderCounts();
+          }, 300);
+        }
+      }
+    }
+
+    // Kitchen and management functions
+    function checkKitchen() {
+      alert('Opening kitchen status view...');
+    }
+
+    function processPayment() {
+      alert('Opening payment processing...');
+    }
+
+    function callManager() {
+      alert('Calling manager for assistance...');
+    }
+
+    // Update order counts
+    function updateOrderCounts() {
+      const activeOrders = document.querySelectorAll('.order-item').length;
+      const readyOrders = document.querySelectorAll('.order-time.on-time').length;
+      const overdueOrders = document.querySelectorAll('.order-time.overdue').length;
+      
+      // Update status summary
+      document.querySelector('.status-number.ready').textContent = readyOrders;
+      document.querySelector('.status-number.overdue').textContent = overdueOrders;
+    }
+
+    // Simulate new orders and table changes
+    function simulateActivity() {
+      // Randomly update table statuses
+      const tableCards = document.querySelectorAll('.table-card');
+      tableCards.forEach(card => {
+        if (Math.random() < 0.1) { // 10% chance of status change
+          const status = card.querySelector('.table-status');
+          if (status.textContent === 'Empty') {
+            status.textContent = 'Ordering';
+            status.className = 'table-status status-occupied';
+            card.className = 'table-card occupied';
+          }
+        }
+      });
+      
+      updateOrderCounts();
+    }
+
+    // Simulate activity every 30 seconds
+    setInterval(simulateActivity, 30000);
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && e.target.classList.contains('btn')) {
+        e.target.click();
+      }
+    });
+
+    // Auto-refresh table status every 10 seconds
+    setInterval(() => {
+      // Update wait times
+      const timeElements = document.querySelectorAll('.table-time');
+      timeElements.forEach(element => {
+        if (element.textContent.includes('min')) {
+          const currentTime = parseInt(element.textContent);
+          if (currentTime < 30) {
+            element.textContent = (currentTime + 1) + ' min';
+          }
+        }
+      });
+    }, 10000);
+  </script>
+</body>
+</html>

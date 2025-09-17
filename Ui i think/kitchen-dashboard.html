@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Talasco Kitchen AI – Kitchen Display System</title>
+<style>
+  :root{
+    --bg-dark:#0a0f1c; --bg-main:#1a1f2e; --bg-card:#252b3d;
+    --text-bright:#ffffff; --text-muted:#a0aec0; --text-subtle:#718096;
+    --accent-green:#48bb78; --accent-yellow:#ed8936; --accent-red:#f56565; --accent-blue:#4299e1;
+    --border-subtle:#2d3748; --border-bright:#4a5568;
+    --shadow-soft:0 4px 6px -1px rgba(0,0,0,0.3); --shadow-medium:0 10px 15px -3px rgba(0,0,0,0.4);
+    --radius:12px; --radius-sm:8px;
+  }
+  
+  *{box-sizing:border-box;margin:0;padding:0}
+  
+  body{
+    background:linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-main) 100%);
+    color:var(--text-bright);font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+    min-height:100vh;overflow-x:hidden;
+  }
+  
+  /* HEADER - Simple and Clear */
+  .header{
+    background:var(--bg-card);border-bottom:2px solid var(--border-bright);
+    padding:1rem 2rem;display:flex;justify-content:space-between;align-items:center;
+    box-shadow:var(--shadow-medium);
+  }
+  
+  .header-left{
+    display:flex;align-items:center;gap:1rem;
+  }
+  
+  .kitchen-icon{
+    width:50px;height:50px;background:var(--accent-green);
+    border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;
+    font-size:1.5rem;color:white;font-weight:bold;
+  }
+  
+  .header-info h1{
+    font-size:1.8rem;font-weight:bold;color:var(--text-bright);
+    margin-bottom:0.25rem;
+  }
+  
+  .header-info p{
+    color:var(--text-muted);font-size:1rem;
+  }
+  
+  .header-right{
+    text-align:right;
+  }
+  
+  .current-time{
+    font-size:1.5rem;font-weight:bold;color:var(--accent-blue);
+  }
+  
+  .staff-info{
+    color:var(--text-muted);font-size:0.9rem;margin-top:0.25rem;
+  }
+  
+  /* MAIN LAYOUT - Clean Grid */
+  .main-content{
+    padding:2rem;max-width:1400px;margin:0 auto;
+  }
+  
+  .content-grid{
+    display:grid;grid-template-columns:1fr 400px;gap:2rem;
+  }
+  
+  @media (max-width:1024px){
+    .content-grid{grid-template-columns:1fr;gap:1.5rem}
+  }
+  
+  /* ORDER QUEUE - Main Focus */
+  .order-queue{
+    background:var(--bg-card);border-radius:var(--radius);padding:1.5rem;
+    box-shadow:var(--shadow-soft);border:1px solid var(--border-subtle);
+  }
+  
+  .section-title{
+    font-size:1.5rem;font-weight:bold;color:var(--text-bright);
+    margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;
+  }
+  
+  .section-title::before{
+    content:"📋";font-size:1.2rem;
+  }
+  
+  /* ORDER CARDS - Large and Clear */
+  .order-card{
+    background:linear-gradient(135deg, var(--bg-main) 0%, var(--bg-card) 100%);
+    border:2px solid var(--border-subtle);border-radius:var(--radius);
+    padding:1.5rem;margin-bottom:1rem;
+    transition:all 0.3s ease;position:relative;
+    box-shadow:var(--shadow-soft);
+  }
+  
+  .order-card:hover{
+    border-color:var(--accent-blue);transform:translateY(-2px);
+    box-shadow:var(--shadow-medium);
+  }
+  
+  .order-card.urgent{
+    border-color:var(--accent-red);background:linear-gradient(135deg, rgba(245,101,101,0.1) 0%, var(--bg-card) 100%);
+    animation:pulse-red 2s infinite;
+  }
+  
+  @keyframes pulse-red{
+    0%,100%{border-color:var(--accent-red)}
+    50%{border-color:#ff6b6b}
+  }
+  
+  .order-header{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-bottom:1rem;
+  }
+  
+  .order-number{
+    font-size:1.3rem;font-weight:bold;color:var(--accent-blue);
+  }
+  
+  .order-time{
+    font-size:1.1rem;font-weight:bold;padding:0.5rem 1rem;
+    border-radius:var(--radius-sm);color:white;
+  }
+  
+  .order-time.on-time{background:var(--accent-green)}
+  .order-time.warning{background:var(--accent-yellow)}
+  .order-time.overdue{background:var(--accent-red)}
+  
+  .order-details{
+    margin-bottom:1rem;
+  }
+  
+  .order-items{
+    display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem;
+  }
+  
+  .item-tag{
+    background:var(--accent-green);color:white;padding:0.5rem 1rem;
+    border-radius:var(--radius-sm);font-size:0.9rem;font-weight:bold;
+  }
+  
+  .order-notes{
+    background:rgba(237,137,54,0.1);border-left:4px solid var(--accent-yellow);
+    padding:0.75rem;border-radius:var(--radius-sm);margin-bottom:1rem;
+    color:var(--text-muted);font-style:italic;
+  }
+  
+  .order-actions{
+    display:flex;gap:1rem;margin-top:1rem;
+  }
+  
+  .btn{
+    padding:0.75rem 1.5rem;border:none;border-radius:var(--radius-sm);
+    font-weight:bold;cursor:pointer;transition:all 0.2s ease;
+    font-size:1rem;display:flex;align-items:center;gap:0.5rem;
+  }
+  
+  .btn-start{
+    background:var(--accent-green);color:white;
+  }
+  
+  .btn-start:hover{background:#38a169;transform:translateY(-1px)}
+  
+  .btn-complete{
+    background:var(--accent-blue);color:white;
+  }
+  
+  .btn-complete:hover{background:#3182ce;transform:translateY(-1px)}
+  
+  .btn-urgent{
+    background:var(--accent-red);color:white;
+  }
+  
+  .btn-urgent:hover{background:#e53e3e;transform:translateY(-1px)}
+  
+  /* SIDEBAR */
+  .sidebar{
+    display:flex;flex-direction:column;gap:1.5rem;
+  }
+  
+  /* STATUS PANEL */
+  .status-panel{
+    background:var(--bg-card);border-radius:var(--radius);padding:1.5rem;
+    box-shadow:var(--shadow-soft);border:1px solid var(--border-subtle);
+  }
+  
+  .status-title{
+    font-size:1.2rem;font-weight:bold;color:var(--text-bright);
+    margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;
+  }
+  
+  .status-title::before{
+    content:"⚡";font-size:1rem;
+  }
+  
+  .status-item{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:0.75rem;background:var(--bg-main);border-radius:var(--radius-sm);
+    margin-bottom:0.5rem;
+  }
+  
+  .status-label{
+    color:var(--text-muted);font-weight:500;
+  }
+  
+  .status-value{
+    font-weight:bold;font-size:1.1rem;
+  }
+  
+  .status-value.good{color:var(--accent-green)}
+  .status-value.warning{color:var(--accent-yellow)}
+  .status-value.bad{color:var(--accent-red)}
+  
+  /* ALERTS PANEL */
+  .alerts-panel{
+    background:var(--bg-card);border-radius:var(--radius);padding:1.5rem;
+    box-shadow:var(--shadow-soft);border:1px solid var(--border-subtle);
+  }
+  
+  .alerts-title{
+    font-size:1.2rem;font-weight:bold;color:var(--text-bright);
+    margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;
+  }
+  
+  .alerts-title::before{
+    content:"🚨";font-size:1rem;
+  }
+  
+  .alert-item{
+    padding:1rem;border-radius:var(--radius-sm);margin-bottom:0.75rem;
+    border-left:4px solid;
+  }
+  
+  .alert-item.urgent{
+    background:rgba(245,101,101,0.1);border-left-color:var(--accent-red);
+  }
+  
+  .alert-item.warning{
+    background:rgba(237,137,54,0.1);border-left-color:var(--accent-yellow);
+  }
+  
+  .alert-item.info{
+    background:rgba(66,153,225,0.1);border-left-color:var(--accent-blue);
+  }
+  
+  .alert-message{
+    font-weight:500;margin-bottom:0.25rem;
+  }
+  
+  .alert-time{
+    font-size:0.85rem;color:var(--text-subtle);
+  }
+  
+  /* QUICK ACTIONS */
+  .quick-actions{
+    background:var(--bg-card);border-radius:var(--radius);padding:1.5rem;
+    box-shadow:var(--shadow-soft);border:1px solid var(--border-subtle);
+  }
+  
+  .actions-title{
+    font-size:1.2rem;font-weight:bold;color:var(--text-bright);
+    margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem;
+  }
+  
+  .actions-title::before{
+    content:"⚡";font-size:1rem;
+  }
+  
+  .action-btn{
+    width:100%;padding:1rem;margin-bottom:0.75rem;
+    background:var(--bg-main);border:2px solid var(--border-subtle);
+    border-radius:var(--radius-sm);color:var(--text-bright);
+    font-weight:bold;cursor:pointer;transition:all 0.2s ease;
+    display:flex;align-items:center;justify-content:center;gap:0.5rem;
+  }
+  
+  .action-btn:hover{
+    border-color:var(--accent-blue);background:rgba(66,153,225,0.1);
+    transform:translateY(-1px);
+  }
+  
+  /* RESPONSIVE */
+  @media (max-width:768px){
+    .header{padding:1rem}
+    .main-content{padding:1rem}
+    .order-card{padding:1rem}
+    .content-grid{grid-template-columns:1fr;gap:1rem}
+  }
+  
+  /* ACCESSIBILITY */
+  .btn:focus,.action-btn:focus{
+    outline:2px solid var(--accent-blue);outline-offset:2px;
+  }
+  
+  /* LOADING STATES */
+  .loading{
+    opacity:0.6;pointer-events:none;
+  }
+</style>
+</head>
+<body>
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <div class="kitchen-icon">🍳</div>
+      <div class="header-info">
+        <h1>Kitchen Display System</h1>
+        <p>Downtown Location • Maki Station</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="current-time" id="currentTime">12:34 PM</div>
+      <div class="staff-info">Ken Tan • Kitchen Staff</div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+    <div class="content-grid">
+      
+      <!-- ORDER QUEUE - Main Area -->
+      <div class="order-queue">
+        <h2 class="section-title">Your Orders</h2>
+        
+        <!-- Order 1 - Urgent -->
+        <div class="order-card urgent">
+          <div class="order-header">
+            <div class="order-number">#1423 - Table 14</div>
+            <div class="order-time overdue">+4m OVERDUE</div>
+          </div>
+          <div class="order-details">
+            <div class="order-items">
+              <span class="item-tag">2× Beef Ramen</span>
+              <span class="item-tag">1× Seaweed Salad</span>
+            </div>
+            <div class="order-notes">
+              <strong>Note:</strong> Customer in a hurry, please prioritize
+            </div>
+          </div>
+          <div class="order-actions">
+            <button class="btn btn-complete">✅ Mark Complete</button>
+            <button class="btn btn-urgent">🚨 Escalate</button>
+          </div>
+        </div>
+
+        <!-- Order 2 - In Progress -->
+        <div class="order-card">
+          <div class="order-header">
+            <div class="order-number">#1424 - Table 8</div>
+            <div class="order-time warning">2m remaining</div>
+          </div>
+          <div class="order-details">
+            <div class="order-items">
+              <span class="item-tag">3× Salmon Maki</span>
+              <span class="item-tag">2× Udon Noodles</span>
+            </div>
+          </div>
+          <div class="order-actions">
+            <button class="btn btn-complete">✅ Mark Complete</button>
+          </div>
+        </div>
+
+        <!-- Order 3 - Just Started -->
+        <div class="order-card">
+          <div class="order-header">
+            <div class="order-number">#1425 - Delivery</div>
+            <div class="order-time on-time">8m remaining</div>
+          </div>
+          <div class="order-details">
+            <div class="order-items">
+              <span class="item-tag">1× Dragon Roll</span>
+              <span class="item-tag">1× Tempura</span>
+            </div>
+          </div>
+          <div class="order-actions">
+            <button class="btn btn-complete">✅ Mark Complete</button>
+          </div>
+        </div>
+
+        <!-- Order 4 - New Order -->
+        <div class="order-card">
+          <div class="order-header">
+            <div class="order-number">#1426 - Table 12</div>
+            <div class="order-time on-time">10m remaining</div>
+          </div>
+          <div class="order-details">
+            <div class="order-items">
+              <span class="item-tag">1× California Roll</span>
+              <span class="item-tag">1× Miso Soup</span>
+            </div>
+          </div>
+          <div class="order-actions">
+            <button class="btn btn-start">▶️ Start Cooking</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SIDEBAR -->
+      <div class="sidebar">
+        
+        <!-- STATUS PANEL -->
+        <div class="status-panel">
+          <h3 class="status-title">Station Status</h3>
+          
+          <div class="status-item">
+            <span class="status-label">Orders in Queue</span>
+            <span class="status-value warning">4</span>
+          </div>
+          
+          <div class="status-item">
+            <span class="status-label">Avg Prep Time</span>
+            <span class="status-value good">7.2m</span>
+          </div>
+          
+          <div class="status-item">
+            <span class="status-label">On-Time Rate</span>
+            <span class="status-value good">92%</span>
+          </div>
+          
+          <div class="status-item">
+            <span class="status-label">Station Load</span>
+            <span class="status-value warning">85%</span>
+          </div>
+        </div>
+
+        <!-- ALERTS PANEL -->
+        <div class="alerts-panel">
+          <h3 class="alerts-title">Alerts</h3>
+          
+          <div class="alert-item urgent">
+            <div class="alert-message">Order #1423 is 4 minutes overdue!</div>
+            <div class="alert-time">2 minutes ago</div>
+          </div>
+          
+          <div class="alert-item warning">
+            <div class="alert-message">Station load at 85% - consider asking for help</div>
+            <div class="alert-time">5 minutes ago</div>
+          </div>
+          
+          <div class="alert-item info">
+            <div class="alert-message">New order #1426 added to queue</div>
+            <div class="alert-time">1 minute ago</div>
+          </div>
+        </div>
+
+        <!-- QUICK ACTIONS -->
+        <div class="quick-actions">
+          <h3 class="actions-title">Quick Actions</h3>
+          
+          <button class="action-btn" onclick="requestHelp()">
+            🆘 Request Help
+          </button>
+          
+          <button class="action-btn" onclick="reportIssue()">
+            📝 Report Issue
+          </button>
+          
+          <button class="action-btn" onclick="viewMenu()">
+            📋 View Menu
+          </button>
+          
+          <button class="action-btn" onclick="checkInventory()">
+            📦 Check Inventory
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Real-time clock
+    function updateClock() {
+      const now = new Date();
+      const timeString = now.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+      document.getElementById('currentTime').textContent = timeString;
+    }
+    
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // Order completion handlers
+    document.querySelectorAll('.btn-complete').forEach(btn => {
+      btn.addEventListener('click', function() {
+        const orderCard = this.closest('.order-card');
+        
+        // Add loading state
+        this.textContent = '⏳ Processing...';
+        this.disabled = true;
+        
+        // Simulate processing
+        setTimeout(() => {
+          orderCard.style.opacity = '0.5';
+          orderCard.style.transform = 'scale(0.98)';
+          
+          setTimeout(() => {
+            orderCard.remove();
+            updateOrderCount();
+          }, 300);
+        }, 1000);
+      });
+    });
+
+    // Start cooking handlers
+    document.querySelectorAll('.btn-start').forEach(btn => {
+      btn.addEventListener('click', function() {
+        this.textContent = '⏳ Cooking...';
+        this.disabled = true;
+        
+        setTimeout(() => {
+          this.textContent = '✅ Mark Complete';
+          this.className = 'btn btn-complete';
+          this.disabled = false;
+        }, 2000);
+      });
+    });
+
+    // Quick action handlers
+    function requestHelp() {
+      alert('Help request sent to manager!');
+    }
+    
+    function reportIssue() {
+      alert('Opening issue reporting form...');
+    }
+    
+    function viewMenu() {
+      alert('Opening menu and recipes...');
+    }
+    
+    function checkInventory() {
+      alert('Checking ingredient levels...');
+    }
+
+    // Update order count
+    function updateOrderCount() {
+      const orderCount = document.querySelectorAll('.order-card').length;
+      const statusValue = document.querySelector('.status-item .status-value');
+      if (statusValue) {
+        statusValue.textContent = orderCount;
+      }
+    }
+
+    // Simulate new orders coming in
+    function simulateNewOrder() {
+      const orderQueue = document.querySelector('.order-queue');
+      const newOrder = document.createElement('div');
+      newOrder.className = 'order-card';
+      newOrder.innerHTML = `
+        <div class="order-header">
+          <div class="order-number">#${1427 + Math.floor(Math.random() * 10)} - Table ${Math.floor(Math.random() * 20) + 1}</div>
+          <div class="order-time on-time">10m remaining</div>
+        </div>
+        <div class="order-details">
+          <div class="order-items">
+            <span class="item-tag">1× Salmon Maki</span>
+            <span class="item-tag">1× Miso Soup</span>
+          </div>
+        </div>
+        <div class="order-actions">
+          <button class="btn btn-start">▶️ Start Cooking</button>
+        </div>
+      `;
+      
+      orderQueue.appendChild(newOrder);
+      updateOrderCount();
+    }
+
+    // Simulate new orders every 30 seconds
+    setInterval(simulateNewOrder, 30000);
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && e.target.classList.contains('btn-complete')) {
+        e.target.click();
+      }
+    });
+  </script>
+</body>
+</html>
