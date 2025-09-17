@@ -12,6 +12,15 @@ Restaurants face significant challenges in managing kitchen operations efficient
 - **Waste Reduction**: Minimize food waste through intelligent stock management and preparation planning
 - **Cost Optimization**: Reduce operational costs through efficient resource allocation
 
+## 👥 User Roles & Access Control
+
+### 🔐 Role-Based Access System
+- **Admin/Owner** – Full control, settings & users management
+- **Manager** – Runs service, sets SLAs, reviews alerts
+- **Kitchen Staff (Chef/Cook)** – Works tickets on the Kitchen Display System (KDS)
+- **Front-of-House (Server/Cashier)** – Takes/serves orders, marks served
+- **Customer (Guest)** – Orders via table iPad/QR (no login required)
+
 ## ✨ Key Features
 
 ### 🔄 Smart Order Prioritization
@@ -42,6 +51,7 @@ Restaurants face significant challenges in managing kitchen operations efficient
 - **Expiration Tracking**: Monitors product shelf life and suggests usage priorities
 - **Automated Reordering**: Generates purchase orders based on predicted demand
 - **Supplier Integration**: Connects with suppliers for seamless restocking
+- **Multi-location Support**: Manages inventory across multiple restaurant locations
 
 ### 📈 Performance Analytics
 - **Kitchen Efficiency Metrics**: Tracks preparation times, order accuracy, and throughput
@@ -49,6 +59,18 @@ Restaurants face significant challenges in managing kitchen operations efficient
 - **Cost Analysis**: Provides insights into food waste costs and operational efficiency
 - **ROI Tracking**: Measures the impact of AI optimizations on profitability
 
+
+## 🗄️ Database Schema
+
+The system uses a comprehensive relational database with the following key entities:
+- **Organizations & Locations**: Multi-tenant support for restaurant chains
+- **Users & Roles**: Role-based access control with 4 defined roles
+- **Menu & Recipes**: Complete recipe management with ingredient routing
+- **Inventory Management**: Real-time stock tracking with supplier integration
+- **Order Processing**: Complete order lifecycle from placement to completion
+- **Kitchen Display System**: Station-based ticket routing and SLA management
+- **Predictive Analytics**: Demand forecasting and prep planning
+- **Alert System**: Real-time notifications for operational issues
 
 ### Installation
 

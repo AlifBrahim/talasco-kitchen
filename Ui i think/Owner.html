@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>F&B GenAI – Admin/Owner Dashboard</title>
+<title>Talasco Kitchen AI – Admin/Owner Dashboard</title>
 <style>
   :root{
     --bg:#0f172a; --panel:#111827; --text:#e5e7eb; --sub:#94a3b8;
@@ -60,8 +60,8 @@
 <div class="app">
   <!-- SIDEBAR -->
   <aside class="sidebar">
-    <div class="brand"><div class="logo">AI</div><div>GenAI Kitchen Suite</div></div>
-    <div class="role">Signed in as <strong>Owner</strong></div>
+    <div class="brand"><div class="logo">🍳</div><div>Talasco Kitchen AI</div></div>
+    <div class="role">Signed in as <strong>Admin/Owner</strong></div>
     <nav>
       <div class="group">Operations</div>
       <a href="#overview" class="active">Overview</a>
@@ -69,11 +69,14 @@
       <a href="#users">Users & Roles</a>
       <a href="#menu">Menu & Recipes</a>
       <a href="#stations">Stations & SLA</a>
+      <a href="#devices">Devices & Tables</a>
       <div class="group">Inventory</div>
       <a href="#stock">Inventory & Counts</a>
       <a href="#purchasing">Purchasing</a>
-      <div class="group">AI</div>
-      <a href="#forecast">Demand & Prep Plans <span class="chip">GenAI</span></a>
+      <a href="#suppliers">Suppliers</a>
+      <a href="#waste">Waste Tracking</a>
+      <div class="group">AI & Analytics</div>
+      <a href="#forecast">Demand & Prep Plans <span class="chip">AI</span></a>
       <a href="#alerts">Live Alerts</a>
       <a href="#kpi">Service KPIs</a>
     </nav>
@@ -82,9 +85,9 @@
   <!-- MAIN -->
   <main>
     <header class="header">
-      <h1 style="margin:0">Admin / Owner Dashboard</h1>
+      <h1 style="margin:0">Admin/Owner Dashboard</h1>
       <div class="search">
-        <input placeholder="Search locations, users, items…" aria-label="Search" />
+        <input placeholder="Search locations, users, menu items, suppliers…" aria-label="Search" />
         <button>Search</button>
       </div>
     </header>
@@ -200,9 +203,10 @@
       <table>
         <thead><tr><th>Name</th><th>Role</th><th>Location</th><th>Last Active</th><th></th></tr></thead>
         <tbody>
-          <tr><td>Amira Lee</td><td>Manager</td><td>Downtown</td><td>2 min ago</td><td><button class="btn">Edit</button></td></tr>
-          <tr><td>Ken Tan</td><td>Kitchen</td><td>Uptown</td><td>Now</td><td><button class="btn">Edit</button></td></tr>
-          <tr><td>Rafi Aziz</td><td>FOH</td><td>Campus</td><td>8 min ago</td><td><button class="btn">Edit</button></td></tr>
+          <tr><td>Amira Lee</td><td><span class="status s-good">manager</span></td><td>Downtown</td><td>2 min ago</td><td><button class="btn">Edit</button></td></tr>
+          <tr><td>Ken Tan</td><td><span class="status s-warn">kitchen</span></td><td>Uptown</td><td>Now</td><td><button class="btn">Edit</button></td></tr>
+          <tr><td>Rafi Aziz</td><td><span class="status s-warn">front of house</span></td><td>Campus</td><td>8 min ago</td><td><button class="btn">Edit</button></td></tr>
+          <tr><td>Sarah Chen</td><td><span class="status s-good">admin</span></td><td>All Locations</td><td>1 hour ago</td><td><button class="btn">Edit</button></td></tr>
         </tbody>
       </table>
     </section>
@@ -233,6 +237,20 @@
       </table>
     </section>
 
+    <!-- Devices & Tables (maps to devices) -->
+    <section id="devices" class="panel" style="margin-top:18px">
+      <div class="toolbar"><h2 style="margin:0">Devices & Tables</h2><button class="btn">Add Device</button></div>
+      <table>
+        <thead><tr><th>Device</th><th>Type</th><th>Station</th><th>Table #</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>KDS-001</td><td>Kitchen Display</td><td>Maki Station</td><td>—</td><td><span class="status s-good">Active</span></td></tr>
+          <tr><td>KDS-002</td><td>Kitchen Display</td><td>Grill Station</td><td>—</td><td><span class="status s-good">Active</span></td></tr>
+          <tr><td>iPad-014</td><td>Table Order</td><td>—</td><td>14</td><td><span class="status s-good">Active</span></td></tr>
+          <tr><td>iPad-015</td><td>Table Order</td><td>—</td><td>15</td><td><span class="status s-warn">Offline</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+
     <!-- Inventory (maps to inventory_levels, waste_events, inventory_counts) -->
     <section id="stock" class="panel" style="margin-top:18px">
       <div class="toolbar"><h2 style="margin:0">Inventory & Counts</h2><button class="btn">Start Count</button></div>
@@ -246,6 +264,19 @@
       </table>
     </section>
 
+    <!-- Suppliers (maps to suppliers, ingredient_suppliers) -->
+    <section id="suppliers" class="panel" style="margin-top:18px">
+      <div class="toolbar"><h2 style="margin:0">Suppliers</h2><button class="btn">Add Supplier</button></div>
+      <table>
+        <thead><tr><th>Supplier</th><th>Contact</th><th>Lead Time</th><th>Primary Items</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>SushiMart</td><td>sushi@sushimart.com</td><td>1 day</td><td>Nori, Wasabi, Ginger</td><td><span class="status s-good">Active</span></td></tr>
+          <tr><td>BlueSea Co.</td><td>orders@bluesea.com</td><td>2 days</td><td>Salmon, Tuna, Crab</td><td><span class="status s-good">Active</span></td></tr>
+          <tr><td>NoodleWorks</td><td>sales@noodleworks.com</td><td>3 days</td><td>Udon, Ramen, Rice</td><td><span class="status s-warn">Delayed</span></td></tr>
+        </tbody>
+      </table>
+    </section>
+
     <!-- Purchasing (maps to purchase_orders, goods_receipts) -->
     <section id="purchasing" class="panel" style="margin-top:18px">
       <div class="toolbar"><h2 style="margin:0">Purchasing</h2><button class="btn">New PO</button></div>
@@ -255,6 +286,19 @@
           <tr><td>PO-1042</td><td>SushiMart</td><td><span class="status s-warn">Sent</span></td><td>Tomorrow</td><td>$412.60</td></tr>
           <tr><td>PO-1041</td><td>BlueSea Co.</td><td><span class="status s-good">Received</span></td><td>Today</td><td>$1,128.00</td></tr>
           <tr><td>PO-1039</td><td>NoodleWorks</td><td><span class="status s-bad">Late</span></td><td>+2 days</td><td>$280.00</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Waste Tracking (maps to waste_events) -->
+    <section id="waste" class="panel" style="margin-top:18px">
+      <div class="toolbar"><h2 style="margin:0">Waste Tracking</h2><button class="btn">Log Waste</button></div>
+      <table>
+        <thead><tr><th>Date</th><th>Item</th><th>Qty</th><th>Reason</th><th>Cost</th></tr></thead>
+        <tbody>
+          <tr><td>Today 14:30</td><td>Salmon Fillet (2kg)</td><td>2.0 kg</td><td>Expired</td><td>$24.00</td></tr>
+          <tr><td>Today 12:15</td><td>Rice (5 portions)</td><td>5 portions</td><td>Overcooked</td><td>$3.50</td></tr>
+          <tr><td>Yesterday</td><td>Seaweed Salad</td><td>3 bowls</td><td>Customer complaint</td><td>$12.00</td></tr>
         </tbody>
       </table>
     </section>
@@ -301,7 +345,7 @@
       <footer>Data aggregates from <code>orders</code>, <code>kds_tickets</code>, <code>waste_events</code> into <code>service_periods</code>.</footer>
     </section>
 
-    <footer class="muted">Mock UI – replace the tables with live API/DB calls when you wire your backend.</footer>
+    <footer class="muted">Talasco Kitchen AI Dashboard – Mock UI for Admin/Owner role. Replace tables with live API/DB calls when implementing backend integration.</footer>
   </main>
 </div>
 

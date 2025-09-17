@@ -1,59 +1,92 @@
-## Actors
+## Actors & User Roles
 
--Kitchen staff / chefs → want clear, optimized order queues.
+### Admin/Owner
+- Full system control and configuration
+- Manages users, locations, and organizational settings
+- Reviews high-level analytics and performance metrics
+- Configures system-wide policies and integrations
 
--Restaurant manager → wants stock levels optimized to cut waste + avoid 
-shortages.
+### Manager
+- Runs daily service operations and manages staff
+- Sets and monitors SLA targets for different stations
+- Reviews and responds to operational alerts
+- Manages inventory levels and supplier relationships
 
--Waiters / front staff → want alerts on delays to manage customer expectations.
+### Kitchen Staff (Chef/Cook)
+- Works tickets on the Kitchen Display System (KDS)
+- Needs clear, optimized order queues prioritized by prep time and wait time
+- Requires real-time alerts for SLA breaches and station overloads
+- Benefits from demand forecasting and prep recommendations
 
--Customers → indirectly benefit via faster service & fewer “out of stock” items.
+### Front-of-House (Server/Cashier)
+- Takes and serves orders, marks items as served
+- Needs alerts on delays to manage customer expectations
+- Requires visibility into order status and estimated completion times
+- Handles customer inquiries and manages table service
 
--Data collector / field agent → conducts on-site 7-day baseline data collection using standardized templates (purchases, sales, prep yield, waste, temperatures). May be assigned to the restaurant manager if no dedicated staff.
+### Customer (Guest)
+- Orders via table iPad/QR code (no login required)
+- Indirectly benefits from faster service and fewer "out of stock" items
+- Expects accurate wait times and order accuracy
+
 
 ## User Stories
 
--As a chef, I want orders prioritized by prep time and wait time so that I can cook efficiently and reduce customer wait.
+### Admin/Owner Stories
+- As an admin, I want to manage user roles and permissions so that I can control system access appropriately.
+- As an admin, I want to configure multiple locations and their settings so that I can manage a restaurant chain effectively.
+- As an admin, I want to set system-wide policies and integrations so that all locations operate consistently.
 
--As a restaurant manager, I want AI to predict daily prep needs so that I minimize food waste while avoiding stock-outs.
+### Manager Stories
+- As a manager, I want AI to predict daily prep needs so that I minimize food waste while avoiding stock-outs.
+- As a manager, I want real-time inventory tracking and restock suggestions so that I maintain optimal stock levels.
+- As a manager, I want to set and monitor SLA targets for different stations so that I can ensure service quality.
+- As a manager, I want to review and respond to operational alerts so that I can address issues quickly.
 
--As a waiter, I want alerts when customer wait time exceeds limits so that I can inform or compensate them.
+### Kitchen Staff Stories
+- As a chef, I want orders prioritized by prep time and wait time so that I can cook efficiently and reduce customer wait.
+- As a kitchen staff member, I want clear visual displays of my work queue so that I can focus on cooking without confusion.
+- As a chef, I want alerts when orders are approaching SLA breach so that I can prioritize accordingly.
 
--As a manager, I want real-time inventory tracking and restock suggestions so that I maintain optimal stock levels.
+### Front-of-House Stories
+- As a server, I want alerts when customer wait time exceeds limits so that I can inform or compensate them.
+- As a cashier, I want to easily mark orders as served so that kitchen staff know when items are ready.
+- As FOH staff, I want visibility into order status so that I can answer customer questions accurately.
 
--As a data collector, I want downloadable spreadsheet templates for purchases, sales, prep yield, waste, and temperature logs so that I can collect consistent data.
-
--As a data collector, I want to run a 7-day baseline audit on-site to seed the system where no historical data exists.
-
--As a restaurant manager assigned as data collector, I want simple daily forms to enter totals and line items without integrations.
-
--As a manager, I want completeness checks for the 7-day period so that I know when the system is ready to generate forecasts and prep plans.
-
--As a small-restaurant owner without a POS, I want a zero-integration mode with simple daily sales entry and a menu template so that I can start immediately.
 
 ## Acceptance Criteria
 
-Functional
+### Functional Requirements
 
--Orders appear in prioritized queue (by prep + wait time).
+#### Role-Based Access Control
+- Admin/Owner can manage all users, locations, and system settings
+- Manager can set SLAs, review alerts, and manage inventory
+- Kitchen staff can only access KDS tickets and order queues
+- Front-of-House can take orders and mark items as served
+- Customers can order via table iPad/QR without login
 
--System generates pre-dining prep recommendations (e.g., “Prepare 20 chicken portions for Friday dinner rush”).
+#### Order Management
+- Orders appear in prioritized queue (by prep + wait time)
+- KDS tickets route to appropriate stations based on menu item routing
+- Real-time order status updates across all user interfaces
+- SLA monitoring and breach alerts for kitchen staff
 
--Alerts trigger if order wait time > X minutes.
+#### Predictive Analytics
+- System generates pre-dining prep recommendations (e.g., "Prepare 20 chicken portions for Friday dinner rush")
+- Demand forecasting based on historical patterns and external factors
+- Prep plans generated with specific quantities and timing recommendations
 
--Stock updates in real-time after each order deduction.
+#### Alert System
+- Alerts trigger if order wait time > X minutes
+- Station overload alerts when capacity exceeds thresholds
+- Low stock alerts generated when inventory < par levels
+- Role-specific alert routing (managers get all alerts, kitchen gets SLA alerts)
 
--Restock alerts generated when stock < threshold (e.g., 10% remaining).
-
--Provide CSV/Excel templates for purchases, sales, prep yield, waste, and temperature logs with required fields and standardized units.
-
--In-app manual entry forms mirror templates; allow quick row add/edit, unit selection, and client-side validation for required fields and ranges.
-
--A 7-day baseline completeness gate (all daily templates submitted) before enabling predictions and prep recommendations.
-
--Role assignment lets either a dedicated data collector or the restaurant manager own the daily data tasks; checklist shows completion status.
-
--Datasets exportable as CSV/JSON for audits and external analysis.
+#### Inventory Management
+- Stock updates in real-time after each order deduction
+- Multi-location inventory tracking with transfer capabilities
+- Supplier integration for automated reordering
+- Waste tracking and cost analysis
 
 Non-Functional
 
