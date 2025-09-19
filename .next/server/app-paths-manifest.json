@@ -1,9 +1,0 @@
-{
-  "/page": "app/page.js",
-  "/manager/page": "app/manager/page.js",
-  "/kitchen/page": "app/kitchen/page.js",
-  "/api/orders/route": "app/api/orders/route.js",
-  "/api/menu-items/route": "app/api/menu-items/route.js",
-  "/api/orders/checkout/route": "app/api/orders/checkout/route.js",
-  "/api/stations/route": "app/api/stations/route.js"
-}
