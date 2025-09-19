@@ -34,45 +34,7 @@ interface MenuItem {
 }
 
 // Default menu items (fallback)
-const defaultMenuItems: MenuItem[] = [
-  {
-    id: '1',
-    name: 'Margherita Pizza',
-    description: 'Classic pizza with fresh mozzarella, tomato sauce, and basil',
-    price: 16.99,
-    image: pizzaImg,
-    category: 'main',
-    badge: 'Veg',
-    avg_prep_minutes: 15
-  },
-  {
-    id: '2',
-    name: 'Grilled Chicken Salad',
-    description: 'Fresh mixed greens with grilled chicken, cherry tomatoes, and balsamic dressing',
-    price: 14.99,
-    image: saladImg,
-    category: 'main',
-    avg_prep_minutes: 8
-  },
-  {
-    id: '3',
-    name: 'Pasta Carbonara',
-    description: 'Creamy pasta with pancetta, parmesan cheese, and black pepper',
-    price: 18.99,
-    image: pastaImg,
-    category: 'main',
-    avg_prep_minutes: 20
-  },
-  {
-    id: '4',
-    name: 'Classic Burger',
-    description: 'Beef patty with lettuce, tomato, onion, and fries',
-    price: 15.99,
-    image: burgerImg,
-    category: 'main',
-    avg_prep_minutes: 12
-  }
-];
+const defaultMenuItems: MenuItem[] = [];
 
 export default function Index() {
   const [activeCategory, setActiveCategory] = useState<'main' | 'desserts' | 'drinks'>('main');
@@ -111,6 +73,23 @@ export default function Index() {
         }));
         
         setMenuItems(transformedItems);
+
+        setCart(prevCart => {
+          const validIds = new Set(transformedItems.map(item => item.id));
+          let mutated = false;
+          const nextEntries = Object.entries(prevCart).filter(([itemId]) => {
+            const keep = validIds.has(itemId);
+            if (!keep) mutated = true;
+            return keep;
+          });
+
+          if (!mutated) {
+            return prevCart;
+          }
+
+          const nextCart = Object.fromEntries(nextEntries) as typeof prevCart;
+          return nextCart;
+        });
       } catch (err) {
         console.error('Error fetching menu items:', err);
         setError('Failed to load menu items. Using default menu.');

@@ -1,49 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GetMenuItemsResponse } from '@shared/api';
+import { dbQuery } from '@server/db';
 
-// Mock data for now - replace with actual database queries
-const mockMenuItems = [
-  {
-    id: '1',
-    org_id: 'org-1',
-    sku: 'PIZZA-001',
-    name: 'Margherita Pizza',
-    category: 'Pizza',
-    is_active: true,
-    avg_prep_minutes: 15,
-    created_at: '2024-01-01T00:00:00Z'
-  },
-  {
-    id: '2',
-    org_id: 'org-1',
-    sku: 'SALAD-001',
-    name: 'Caesar Salad',
-    category: 'Salad',
-    is_active: true,
-    avg_prep_minutes: 8,
-    created_at: '2024-01-01T00:00:00Z'
-  },
-  {
-    id: '3',
-    org_id: 'org-1',
-    sku: 'PASTA-001',
-    name: 'Spaghetti Carbonara',
-    category: 'Pasta',
-    is_active: true,
-    avg_prep_minutes: 20,
-    created_at: '2024-01-01T00:00:00Z'
-  },
-  {
-    id: '4',
-    org_id: 'org-1',
-    sku: 'BURGER-001',
-    name: 'Classic Burger',
-    category: 'Main',
-    is_active: true,
-    avg_prep_minutes: 12,
-    created_at: '2024-01-01T00:00:00Z'
-  }
-];
+type MenuItemRow = {
+  id: string;
+  org_id: string;
+  sku: string | null;
+  name: string;
+  category: string | null;
+  is_active: boolean;
+  avg_prep_minutes: string | number | null;
+  created_at: Date | string;
+};
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,19 +19,51 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category');
     const active = searchParams.get('active');
 
-    let filteredItems = mockMenuItems;
+    const conditions: string[] = [];
+    const values: Array<string | boolean> = [];
 
     if (category) {
-      filteredItems = filteredItems.filter(item => item.category === category);
+      conditions.push(`category = $${conditions.length + 1}`);
+      values.push(category);
     }
 
     if (active !== null) {
-      const isActive = active === 'true';
-      filteredItems = filteredItems.filter(item => item.is_active === isActive);
+      conditions.push(`is_active = $${conditions.length + 1}`);
+      values.push(active === 'true');
     }
 
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = await dbQuery<MenuItemRow>(
+      `SELECT
+         id::text,
+         org_id::text,
+         sku,
+         name,
+         category,
+         is_active,
+         avg_prep_minutes,
+         created_at
+       FROM menu_items
+       ${whereClause}
+       ORDER BY created_at DESC`,
+      values,
+    );
+
     const response: GetMenuItemsResponse = {
-      menu_items: filteredItems
+      menu_items: result.rows.map((row) => ({
+        id: row.id,
+        org_id: row.org_id,
+        sku: row.sku ?? undefined,
+        name: row.name,
+        category: row.category ?? undefined,
+        is_active: row.is_active,
+        avg_prep_minutes: row.avg_prep_minutes !== null ? Number(row.avg_prep_minutes) : undefined,
+        created_at:
+          row.created_at instanceof Date
+            ? row.created_at.toISOString()
+            : new Date(row.created_at).toISOString(),
+      })),
     };
 
     return NextResponse.json(response);

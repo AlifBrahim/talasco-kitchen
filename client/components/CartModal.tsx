@@ -5,6 +5,7 @@ import { CreateOrderRequest } from '@shared/api';
 
 interface CartItem {
   id: string;
+  menuItemId: string;
   name: string;
   price: number;
   quantity: number;
@@ -49,6 +50,7 @@ export default function CartModal({
       const menuItem = menuItems.find(item => item.id === itemId);
       return {
         id: itemId,
+        menuItemId: menuItem?.id ?? itemId,
         name: menuItem?.name || 'Unknown Item',
         price: menuItem?.price || 0,
         quantity,
@@ -66,13 +68,21 @@ export default function CartModal({
 
     setIsCheckingOut(true);
     try {
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const invalidItem = cartItems.find(item => !uuidPattern.test(item.menuItemId));
+      if (invalidItem) {
+        alert('Menu was refreshed. Please re-add items to your cart.');
+        setIsCheckingOut(false);
+        return;
+      }
+
       const orderRequest: CreateOrderRequest = {
         location_id: 'loc-1', // Default location - in real app, get from context
         source: orderType,
         table_number: orderType === 'dine_in' ? customerInfo.tableNumber : undefined,
         customer_name: customerInfo.name || undefined,
         items: cartItems.map(item => ({
-          menu_item_id: item.id,
+          menu_item_id: item.menuItemId,
           qty: item.quantity,
           notes: item.specialInstructions || customerInfo.specialRequests || undefined
         }))

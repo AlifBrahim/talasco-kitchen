@@ -49,6 +49,12 @@
       ],
       "@shared/*": [
         "./shared/*"
+      ],
+      "@server/*": [
+        "./lib/*"
+      ],
+      "@api-lib/*": [
+        "./app/api/_lib/*"
       ]
     },
     "allowJs": true,
@@ -64,6 +70,7 @@
     "app/**/*",
     "client/**/*",
     "shared/**/*",
+    "lib/**/*",
     "next-env.d.ts",
       "images.d.ts",
     "next.config.mjs",

@@ -1,89 +1,98 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GetStationsResponse } from '@shared/api';
+import { GetStationsResponse, StationSLA } from '@shared/api';
+import { dbQuery } from '@server/db';
 
-// Mock data for now - replace with actual database queries
-const mockStations: GetStationsResponse['stations'] = [
-  {
-    id: 'station-1',
-    location_id: 'loc-1',
-    name: 'Prep Station A',
-    kind: 'prep',
-    is_active: true,
-    station_sla: [
-      {
-        id: 'sla-1',
-        station_id: 'station-1',
-        daypart: 'lunch',
-        target_prep_minutes: 15,
-        alert_after_minutes: 20
-      },
-      {
-        id: 'sla-2',
-        station_id: 'station-1',
-        daypart: 'dinner',
-        target_prep_minutes: 18,
-        alert_after_minutes: 25
-      }
-    ]
-  },
-  {
-    id: 'station-2',
-    location_id: 'loc-1',
-    name: 'Grill Station',
-    kind: 'cook',
-    is_active: true,
-    station_sla: [
-      {
-        id: 'sla-3',
-        station_id: 'station-2',
-        daypart: 'lunch',
-        target_prep_minutes: 12,
-        alert_after_minutes: 18
-      }
-    ]
-  },
-  {
-    id: 'station-3',
-    location_id: 'loc-1',
-    name: 'Expedite Station',
-    kind: 'expedite',
-    is_active: true,
-    station_sla: [
-      {
-        id: 'sla-4',
-        station_id: 'station-3',
-        daypart: 'lunch',
-        target_prep_minutes: 5,
-        alert_after_minutes: 8
-      }
-    ]
-  }
-];
+type StationRow = {
+  id: string;
+  location_id: string;
+  name: string;
+  kind: GetStationsResponse['stations'][number]['kind'];
+  is_active: boolean;
+};
+
+type StationSlaRow = {
+  id: string;
+  station_id: string;
+  daypart: string;
+  target_prep_minutes: number;
+  alert_after_minutes: number;
+};
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const location_id = searchParams.get('location_id');
+    const locationId = searchParams.get('location_id');
     const kind = searchParams.get('kind');
     const active = searchParams.get('active');
 
-    let filteredStations = mockStations;
+    const conditions: string[] = [];
+    const values: unknown[] = [];
 
-    if (location_id) {
-      filteredStations = filteredStations.filter(station => station.location_id === location_id);
+    if (locationId) {
+      conditions.push(`location_id = $${conditions.length + 1}::uuid`);
+      values.push(locationId);
     }
 
     if (kind) {
-      filteredStations = filteredStations.filter(station => station.kind === kind);
+      conditions.push(`kind = $${conditions.length + 1}`);
+      values.push(kind);
     }
 
     if (active !== null) {
-      const isActive = active === 'true';
-      filteredStations = filteredStations.filter(station => station.is_active === isActive);
+      conditions.push(`is_active = $${conditions.length + 1}`);
+      values.push(active === 'true');
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const stationsResult = await dbQuery<StationRow>(
+      `SELECT id::text, location_id::text, name, kind, is_active
+       FROM stations
+       ${whereClause}
+       ORDER BY name ASC`,
+      values,
+    );
+
+    if (stationsResult.rowCount === 0) {
+      return NextResponse.json<GetStationsResponse>({ stations: [] });
+    }
+
+    const stationIds = stationsResult.rows.map((station) => station.id);
+
+    const slaResult = await dbQuery<StationSlaRow>(
+      `SELECT
+         id::text,
+         station_id::text,
+         daypart,
+         target_prep_minutes,
+         alert_after_minutes
+       FROM station_sla
+       WHERE station_id = ANY($1::uuid[])`,
+      [stationIds],
+    );
+
+    const slaByStation = new Map<string, StationSlaRow[]>();
+    for (const sla of slaResult.rows) {
+      const current = slaByStation.get(sla.station_id) ?? [];
+      current.push(sla);
+      slaByStation.set(sla.station_id, current);
     }
 
     const response: GetStationsResponse = {
-      stations: filteredStations
+      stations: stationsResult.rows.map((station) => ({
+        id: station.id,
+        location_id: station.location_id,
+        name: station.name,
+        kind: station.kind,
+        is_active: station.is_active,
+        station_sla: (slaByStation.get(station.id) ?? []).map<StationSLA>((sla) => ({
+          id: sla.id,
+          station_id: sla.station_id,
+          daypart: sla.daypart,
+          target_prep_minutes: sla.target_prep_minutes,
+          alert_after_minutes: sla.alert_after_minutes,
+        })),
+      })),
     };
 
     return NextResponse.json(response);
@@ -91,7 +100,7 @@ export async function GET(request: NextRequest) {
     console.error('Error fetching stations:', error);
     return NextResponse.json(
       { error: 'Failed to fetch stations' },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
