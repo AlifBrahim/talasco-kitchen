@@ -1,103 +1,169 @@
 "use client";
-import React, { useState } from 'react';
-import { Clock, Plus, Check, Utensils, ChefHat } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Clock, Plus, Check, Utensils, ChefHat, Loader2, Eye } from 'lucide-react';
 import Link from 'next/link';
+import { GetOrdersResponse, UpdateOrderItemStatusRequest, UpdateOrderItemStatusResponse } from '@shared/api';
+import OrderDetailsModal from '@/components/OrderDetailsModal';
 
 interface OrderItem {
+  id: string;
   name: string;
   note?: string;
+  qty: number;
+  status: 'queued' | 'firing' | 'prepping' | 'passed' | 'served' | 'cancelled';
+  predicted_prep_minutes?: number;
+  started_at?: string;
+  completed_at?: string;
 }
 
 interface Order {
   id: string;
-  tableNumber: string;
-  customerName: string;
-  status: 'new' | 'preparing' | 'ready' | 'completed';
+  tableNumber?: string;
+  customerName?: string;
+  status: 'open' | 'in_progress' | 'ready' | 'served' | 'cancelled';
   items: OrderItem[];
   specialRequests?: string;
   timestamp: string;
   totalTime?: string;
+  source: string;
 }
 
-const sampleOrders: Order[] = [
+// Default orders (fallback)
+const defaultOrders: Order[] = [
   {
     id: '001',
     tableNumber: '12',
     customerName: 'Johnson',
-    status: 'new',
+    status: 'in_progress',
     timestamp: '2:04',
+    source: 'dine_in',
     items: [
-      { name: 'Grilled Salmon', note: 'Medium rare' },
-      { name: 'Caesar Salad' },
-      { name: 'Garlic Bread', note: 'Extra garlic' }
+      { id: '1', name: 'Grilled Salmon', note: 'Medium rare', qty: 1, status: 'prepping' },
+      { id: '2', name: 'Caesar Salad', qty: 1, status: 'queued' },
+      { id: '3', name: 'Garlic Bread', note: 'Extra garlic', qty: 1, status: 'queued' }
     ],
     specialRequests: 'No onions, extra lemon on the side'
-  },
-  {
-    id: '004',
-    tableNumber: '3',
-    customerName: 'Wilson',
-    status: 'new',
-    timestamp: '1:04',
-    items: [
-      { name: 'Fish Tacos' },
-      { name: 'Loaded Nachos', note: 'No jalapeños' },
-      { name: 'Margarita' }
-    ],
-    specialRequests: 'Gluten-free tortillas for tacos'
-  },
-  {
-    id: '005',
-    tableNumber: '22',
-    customerName: 'Thompson',
-    status: 'preparing',
-    timestamp: '15:04',
-    items: [
-      { name: 'Lobster Bisque' },
-      { name: 'Filet Mignon', note: 'Medium' },
-      { name: 'Asparagus' }
-    ]
-  },
-  {
-    id: '002',
-    tableNumber: '8',
-    customerName: 'Martinez',
-    status: 'preparing',
-    timestamp: '8:04',
-    items: [
-      { name: 'Ribeye Steak', note: 'Well done' },
-      { name: 'Mashed Potatoes' },
-      { name: 'Steamed Broccoli' }
-    ]
-  },
-  {
-    id: '003',
-    tableNumber: '15',
-    customerName: 'Chen',
-    status: 'ready',
-    timestamp: '12:05',
-    items: [
-      { name: 'Chicken Parmesan' },
-      { name: 'Spaghetti Marinara' },
-      { name: 'House Salad', note: 'Dressing on the side' }
-    ]
-  },
-  {
-    id: '006',
-    tableNumber: '7',
-    customerName: 'Davis',
-    status: 'completed',
-    timestamp: '25:05',
-    items: [
-      { name: 'Burger & Fries' },
-      { name: 'Chicken Wings', note: 'Buffalo sauce' }
-    ]
   }
 ];
 
 export default function KitchenDisplay() {
-  const [orders, setOrders] = useState<Order[]>(sampleOrders);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'new' | 'preparing' | 'ready' | 'completed'>('all');
+  const [orders, setOrders] = useState<Order[]>(defaultOrders);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'in_progress' | 'ready' | 'served' | 'cancelled'>('all');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [showOrderModal, setShowOrderModal] = useState(false);
+
+  // Fetch orders from API
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const response = await fetch('/api/orders?status=in_progress,ready');
+        if (!response.ok) {
+          throw new Error('Failed to fetch orders');
+        }
+        
+        const data: GetOrdersResponse = await response.json();
+        
+        // Transform database orders to UI format
+        const transformedOrders: Order[] = data.orders.map((dbOrder) => ({
+          id: dbOrder.id,
+          tableNumber: dbOrder.table_number,
+          customerName: dbOrder.customer_name,
+          status: dbOrder.status,
+          timestamp: formatTimeAgo(dbOrder.placed_at),
+          source: dbOrder.source,
+          items: dbOrder.order_items.map((item) => ({
+            id: item.id,
+            name: item.menu_item.name,
+            note: item.notes,
+            qty: item.qty,
+            status: item.status,
+            predicted_prep_minutes: item.predicted_prep_minutes,
+            started_at: item.started_at,
+            completed_at: item.completed_at
+          })),
+          specialRequests: dbOrder.order_items
+            .filter(item => item.notes)
+            .map(item => item.notes)
+            .join(', ')
+        }));
+        
+        setOrders(transformedOrders);
+      } catch (err) {
+        console.error('Error fetching orders:', err);
+        setError('Failed to load orders. Using sample data.');
+        // Keep default orders as fallback
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrders();
+    
+    // Refresh orders every 30 seconds
+    const interval = setInterval(fetchOrders, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Format time ago
+  const formatTimeAgo = (dateString: string): string => {
+    const now = new Date();
+    const orderTime = new Date(dateString);
+    const diffInMinutes = Math.floor((now.getTime() - orderTime.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    return `${diffInDays}d ago`;
+  };
+
+  const updateOrderItemStatus = async (orderId: string, itemId: string, newStatus: OrderItem['status']) => {
+    try {
+      const request: UpdateOrderItemStatusRequest = {
+        order_item_id: itemId,
+        status: newStatus
+      };
+
+      const response = await fetch(`/api/orders/${orderId}/items/${itemId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update order item status');
+      }
+
+      const data: UpdateOrderItemStatusResponse = await response.json();
+      
+      // Update local state
+      setOrders(prev => prev.map(order => 
+        order.id === orderId 
+          ? {
+              ...order,
+              items: order.items.map(item =>
+                item.id === itemId 
+                  ? { ...item, status: newStatus }
+                  : item
+              )
+            }
+          : order
+      ));
+    } catch (err) {
+      console.error('Error updating order item status:', err);
+      setError('Failed to update order item status');
+    }
+  };
 
   const updateOrderStatus = (orderId: string, newStatus: Order['status']) => {
     setOrders(prev => prev.map(order => 
@@ -105,20 +171,43 @@ export default function KitchenDisplay() {
     ));
   };
 
+  const openOrderModal = (order: Order) => {
+    setSelectedOrder(order);
+    setShowOrderModal(true);
+  };
+
+  const closeOrderModal = () => {
+    setShowOrderModal(false);
+    setSelectedOrder(null);
+  };
+
   const getStatusColor = (status: Order['status']) => {
     switch (status) {
-      case 'new': return 'bg-status-new';
-      case 'preparing': return 'bg-status-preparing';
-      case 'ready': return 'bg-status-ready';
-      case 'completed': return 'bg-status-completed';
+      case 'open': return 'bg-blue-500';
+      case 'in_progress': return 'bg-yellow-500';
+      case 'ready': return 'bg-green-500';
+      case 'served': return 'bg-gray-500';
+      case 'cancelled': return 'bg-red-500';
       default: return 'bg-neutral-400';
     }
   };
 
   const getStatusTextColor = (status: Order['status']) => {
     switch (status) {
-      case 'completed': return 'text-neutral-600';
+      case 'served': return 'text-white';
       default: return 'text-white';
+    }
+  };
+
+  const getItemStatusColor = (status: OrderItem['status']) => {
+    switch (status) {
+      case 'queued': return 'bg-gray-100 text-gray-800';
+      case 'firing': return 'bg-orange-100 text-orange-800';
+      case 'prepping': return 'bg-yellow-100 text-yellow-800';
+      case 'passed': return 'bg-blue-100 text-blue-800';
+      case 'served': return 'bg-green-100 text-green-800';
+      case 'cancelled': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -133,7 +222,7 @@ export default function KitchenDisplay() {
   };
 
   const getActiveOrdersCount = () => {
-    return orders.filter(order => order.status === 'new' || order.status === 'preparing').length;
+    return orders.filter(order => order.status === 'open' || order.status === 'in_progress').length;
   };
 
   return (
@@ -186,10 +275,10 @@ export default function KitchenDisplay() {
           <nav className="flex space-x-1 py-4">
             {[
               { key: 'all', label: 'All Orders' },
-              { key: 'new', label: 'New' },
-              { key: 'preparing', label: 'Preparing' },
+              { key: 'in_progress', label: 'In Progress' },
               { key: 'ready', label: 'Ready' },
-              { key: 'completed', label: 'Completed' }
+              { key: 'served', label: 'Served' },
+              { key: 'cancelled', label: 'Cancelled' }
             ].map(({ key, label }) => (
               <button
                 key={key}
@@ -214,9 +303,35 @@ export default function KitchenDisplay() {
 
       {/* Orders Grid */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <div className="text-red-600 mr-3">
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="text-sm text-red-800">{error}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="flex items-center space-x-2">
+              <Loader2 className="h-6 w-6 animate-spin text-neutral-600" />
+              <span className="text-neutral-600">Loading orders...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Orders Grid */}
+        {!loading && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
           {getFilteredOrders().map((order) => (
-            <div key={order.id} className="bg-white rounded-lg border border-neutral-200 overflow-hidden">
+            <div key={order.id} className="bg-white rounded-lg border border-neutral-200 overflow-hidden hover:shadow-md transition-shadow cursor-pointer" onClick={() => openOrderModal(order)}>
               {/* Order Header */}
               <div className="bg-neutral-50 px-4 py-3 border-b border-neutral-200">
                 <div className="flex items-center justify-between">
@@ -229,9 +344,10 @@ export default function KitchenDisplay() {
                     </span>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)} ${getStatusTextColor(order.status)}`}>
-                    {order.status === 'new' ? 'New Order' : 
-                     order.status === 'preparing' ? 'Preparing' :
-                     order.status === 'ready' ? 'Ready' : 'Completed'}
+                    {order.status === 'open' ? 'New Order' : 
+                     order.status === 'in_progress' ? 'In Progress' :
+                     order.status === 'ready' ? 'Ready' : 
+                     order.status === 'served' ? 'Served' : 'Cancelled'}
                   </span>
                 </div>
                 <div className="mt-1">
@@ -243,14 +359,26 @@ export default function KitchenDisplay() {
               <div className="p-4">
                 <div className="space-y-2 mb-4">
                   {order.items.map((item, index) => (
-                    <div key={index} className="flex items-start space-x-2">
+                    <div key={item.id} className="flex items-start space-x-2">
                       <span className="flex-shrink-0 w-6 h-6 bg-neutral-900 text-white text-xs rounded-full flex items-center justify-center font-medium">
                         {index + 1}
                       </span>
                       <div className="flex-1">
-                        <div className="font-medium text-neutral-900">{item.name}</div>
+                        <div className="flex items-center justify-between">
+                          <div className="font-medium text-neutral-900">
+                            {item.name} {item.qty > 1 && `(x${item.qty})`}
+                          </div>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getItemStatusColor(item.status)}`}>
+                            {item.status}
+                          </span>
+                        </div>
                         {item.note && (
                           <div className="text-sm text-neutral-600 italic">Note: {item.note}</div>
+                        )}
+                        {item.predicted_prep_minutes && (
+                          <div className="text-xs text-neutral-500">
+                            Est. {item.predicted_prep_minutes} min
+                          </div>
                         )}
                       </div>
                     </div>
@@ -265,44 +393,92 @@ export default function KitchenDisplay() {
                 )}
 
                 {/* Action Buttons */}
-                <div className="flex space-x-2">
-                  {order.status === 'new' && (
+                <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex space-x-2 mb-2">
                     <button
-                      onClick={() => updateOrderStatus(order.id, 'preparing')}
-                      className="flex-1 bg-neutral-900 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-neutral-800 transition-colors"
+                      onClick={() => openOrderModal(order)}
+                      className="flex-1 bg-neutral-100 text-neutral-700 py-2 px-4 rounded-lg text-sm font-medium hover:bg-neutral-200 transition-colors flex items-center justify-center space-x-1"
                     >
-                      Start Preparing
+                      <Eye className="h-4 w-4" />
+                      <span>View Details</span>
+                    </button>
+                  </div>
+                  
+                  {order.status === 'open' && (
+                    <button
+                      onClick={() => updateOrderStatus(order.id, 'in_progress')}
+                      className="w-full bg-neutral-900 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-neutral-800 transition-colors"
+                    >
+                      Start Order
                     </button>
                   )}
-                  {order.status === 'preparing' && (
+                  {order.status === 'in_progress' && (
                     <button
                       onClick={() => updateOrderStatus(order.id, 'ready')}
-                      className="flex-1 bg-neutral-900 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-neutral-800 transition-colors"
+                      className="w-full bg-green-600 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
                     >
                       Mark Ready
                     </button>
                   )}
                   {order.status === 'ready' && (
                     <button
-                      onClick={() => updateOrderStatus(order.id, 'completed')}
-                      className="flex-1 bg-neutral-900 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-neutral-800 transition-colors flex items-center justify-center space-x-2"
+                      onClick={() => updateOrderStatus(order.id, 'served')}
+                      className="w-full bg-neutral-900 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-neutral-800 transition-colors flex items-center justify-center space-x-2"
                     >
                       <Check className="h-4 w-4" />
-                      <span>Complete</span>
+                      <span>Mark Served</span>
                     </button>
                   )}
-                  {order.status === 'completed' && (
-                    <div className="flex-1 text-center py-2 px-4 text-sm text-neutral-500 font-medium">
-                      Order Completed
+                  {order.status === 'served' && (
+                    <div className="w-full text-center py-2 px-4 text-sm text-neutral-500 font-medium">
+                      Order Served
+                    </div>
+                  )}
+                  
+                  {/* Individual Item Actions */}
+                  {order.status === 'in_progress' && (
+                    <div className="space-y-1">
+                      {order.items.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between text-xs">
+                          <span className="text-neutral-600">{item.name}</span>
+                          <div className="flex space-x-1">
+                            {item.status === 'queued' && (
+                              <button
+                                onClick={() => updateOrderItemStatus(order.id, item.id, 'prepping')}
+                                className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
+                              >
+                                Start
+                              </button>
+                            )}
+                            {item.status === 'prepping' && (
+                              <button
+                                onClick={() => updateOrderItemStatus(order.id, item.id, 'passed')}
+                                className="px-2 py-1 bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
+                              >
+                                Pass
+                              </button>
+                            )}
+                            {item.status === 'passed' && (
+                              <button
+                                onClick={() => updateOrderItemStatus(order.id, item.id, 'served')}
+                                className="px-2 py-1 bg-green-100 text-green-800 rounded hover:bg-green-200"
+                              >
+                                Serve
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
               </div>
             </div>
           ))}
-        </div>
+          </div>
+        )}
 
-        {getFilteredOrders().length === 0 && (
+        {!loading && getFilteredOrders().length === 0 && (
           <div className="text-center py-12">
             <div className="text-neutral-400 mb-4">
               <Clock className="h-12 w-12 mx-auto" />
@@ -317,6 +493,17 @@ export default function KitchenDisplay() {
           </div>
         )}
       </main>
+
+      {/* Order Details Modal */}
+      {selectedOrder && (
+        <OrderDetailsModal
+          order={selectedOrder}
+          isOpen={showOrderModal}
+          onClose={closeOrderModal}
+          onUpdateItemStatus={updateOrderItemStatus}
+          onUpdateOrderStatus={updateOrderStatus}
+        />
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ChefHat,
   BookOpen,
@@ -12,9 +12,14 @@ import {
   Plus,
   Utensils,
   MapPin,
-  Monitor
+  Monitor,
+  Loader2
 } from 'lucide-react';
 import Link from 'next/link';
+import { GetStationsResponse, GetMenuItemsResponse, GetOrdersResponse } from '@shared/api';
+import StationManagementModal from '@/components/StationManagementModal';
+import RecipeBuilderModal from '@/components/RecipeBuilderModal';
+import StationFlowModal from '@/components/StationFlowModal';
 
 interface StationFlow {
   id: string;
@@ -33,19 +38,188 @@ const stationFlows: StationFlow[] = [
 
 export default function KitchenManager() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'recipes' | 'station-flows' | 'menu-builder'>('dashboard');
-  const [selectedRecipe, setSelectedRecipe] = useState('Classic Spaghetti Bolognese');
+  const [stations, setStations] = useState<any[]>([]);
+  const [menuItems, setMenuItems] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedStation, setSelectedStation] = useState<any>(null);
+  const [showStationModal, setShowStationModal] = useState(false);
+  const [showRecipeModal, setShowRecipeModal] = useState(false);
+  const [selectedRecipe, setSelectedRecipe] = useState<any>(null);
+  const [showFlowModal, setShowFlowModal] = useState(false);
+  const [stationFlows, setStationFlows] = useState<any[]>([]);
 
+  // Fetch data from APIs
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const [stationsResponse, menuItemsResponse, ordersResponse] = await Promise.all([
+          fetch('/api/stations'),
+          fetch('/api/menu-items'),
+          fetch('/api/orders')
+        ]);
+
+        if (!stationsResponse.ok || !menuItemsResponse.ok || !ordersResponse.ok) {
+          throw new Error('Failed to fetch data');
+        }
+
+        const [stationsData, menuItemsData, ordersData] = await Promise.all([
+          stationsResponse.json(),
+          menuItemsResponse.json(),
+          ordersResponse.json()
+        ]);
+
+        setStations(stationsData.stations || []);
+        setMenuItems(menuItemsData.menu_items || []);
+        setOrders(ordersData.orders || []);
+      } catch (err) {
+        console.error('Error fetching data:', err);
+        setError('Failed to load data. Using sample data.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Calculate dashboard stats from real data
   const dashboardStats = [
-    { label: 'Total Recipes', value: '1', icon: <BookOpen className="h-5 w-5" />, color: 'text-blue-600' },
-    { label: 'Available Items', value: '0', icon: <Package className="h-5 w-5" />, color: 'text-green-600' },
-    { label: 'Station Flows', value: '0', icon: <Workflow className="h-5 w-5" />, color: 'text-purple-600' },
-    { label: 'Avg Time (min)', value: '65', icon: <Clock className="h-5 w-5" />, color: 'text-orange-600' }
+    { 
+      label: 'Total Recipes', 
+      value: menuItems.length.toString(), 
+      icon: <BookOpen className="h-5 w-5" />, 
+      color: 'text-blue-600' 
+    },
+    { 
+      label: 'Active Stations', 
+      value: stations.filter(s => s.is_active).length.toString(), 
+      icon: <Package className="h-5 w-5" />, 
+      color: 'text-green-600' 
+    },
+    { 
+      label: 'Active Orders', 
+      value: orders.filter(o => o.status === 'in_progress').length.toString(), 
+      icon: <Workflow className="h-5 w-5" />, 
+      color: 'text-purple-600' 
+    },
+    { 
+      label: 'Avg Prep Time (min)', 
+      value: menuItems.length > 0 
+        ? Math.round(menuItems.reduce((sum, item) => sum + (item.avg_prep_minutes || 0), 0) / menuItems.length)
+        : '0', 
+      icon: <Clock className="h-5 w-5" />, 
+      color: 'text-orange-600' 
+    }
   ];
 
+  // Helper functions for station display
+  const getStationColor = (kind: string) => {
+    switch (kind) {
+      case 'prep': return 'bg-blue-500';
+      case 'cook': return 'bg-orange-500';
+      case 'expedite': return 'bg-green-500';
+      case 'bar': return 'bg-purple-500';
+      case 'dessert': return 'bg-pink-500';
+      default: return 'bg-gray-500';
+    }
+  };
+
+  const getStationIcon = (kind: string) => {
+    switch (kind) {
+      case 'prep': return <Utensils className="h-4 w-4" />;
+      case 'cook': return <span className="text-xs">🔥</span>;
+      case 'expedite': return <span className="text-xs">⚡</span>;
+      case 'bar': return <span className="text-xs">🍸</span>;
+      case 'dessert': return <span className="text-xs">🍰</span>;
+      default: return <span className="text-xs">⚙️</span>;
+    }
+  };
+
+  const openStationModal = (station: any) => {
+    setSelectedStation(station);
+    setShowStationModal(true);
+  };
+
+  const closeStationModal = () => {
+    setShowStationModal(false);
+    setSelectedStation(null);
+  };
+
+  const saveStation = (updatedStation: any) => {
+    setStations(prev => prev.map(station => 
+      station.id === updatedStation.id ? updatedStation : station
+    ));
+    console.log('Station updated:', updatedStation);
+  };
+
+  const openRecipeModal = (recipe?: any) => {
+    setSelectedRecipe(recipe || null);
+    setShowRecipeModal(true);
+  };
+
+  const closeRecipeModal = () => {
+    setShowRecipeModal(false);
+    setSelectedRecipe(null);
+  };
+
+  const saveRecipe = (recipe: any) => {
+    console.log('Recipe saved:', recipe);
+    // In a real app, this would update the database
+    // For now, add to menuItems state
+    setMenuItems(prev => {
+      const existingIndex = prev.findIndex(item => item.id === recipe.id);
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        updated[existingIndex] = recipe;
+        return updated;
+      } else {
+        return [...prev, recipe];
+      }
+    });
+  };
+
+  const openFlowModal = () => {
+    setShowFlowModal(true);
+  };
+
+  const closeFlowModal = () => {
+    setShowFlowModal(false);
+  };
+
+  const saveStationFlows = (flows: any[]) => {
+    setStationFlows(flows);
+    console.log('Station flows saved:', flows);
+    // In a real app, this would update the database
+  };
+
+  // Calculate time analytics from real data
   const timeAnalytics = [
-    { label: 'Average Recipe Time', value: '65 min', detail: '' },
-    { label: 'Fastest Recipe', value: '65 min', detail: '' },
-    { label: 'Longest Recipe', value: '65 min', detail: '' }
+    { 
+      label: 'Average Recipe Time', 
+      value: menuItems.length > 0 
+        ? `${Math.round(menuItems.reduce((sum, item) => sum + (item.avg_prep_minutes || 0), 0) / menuItems.length)} min`
+        : '0 min', 
+      detail: '' 
+    },
+    { 
+      label: 'Fastest Recipe', 
+      value: menuItems.length > 0 
+        ? `${Math.min(...menuItems.map(item => item.avg_prep_minutes || 0))} min`
+        : '0 min', 
+      detail: menuItems.length > 0 ? menuItems.find(item => item.avg_prep_minutes === Math.min(...menuItems.map(i => i.avg_prep_minutes || 0)))?.name : ''
+    },
+    { 
+      label: 'Longest Recipe', 
+      value: menuItems.length > 0 
+        ? `${Math.max(...menuItems.map(item => item.avg_prep_minutes || 0))} min`
+        : '0 min', 
+      detail: menuItems.length > 0 ? menuItems.find(item => item.avg_prep_minutes === Math.max(...menuItems.map(i => i.avg_prep_minutes || 0)))?.name : ''
+    }
   ];
 
   const difficultyStats = [
@@ -130,8 +304,32 @@ export default function KitchenManager() {
 
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Dashboard Tab */}
-        {activeTab === 'dashboard' && (
+        {/* Error Message */}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <div className="text-red-600 mr-3">
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="text-sm text-red-800">{error}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="flex items-center space-x-2">
+              <Loader2 className="h-6 w-6 animate-spin text-neutral-600" />
+              <span className="text-neutral-600">Loading kitchen data...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Dashboard Content */}
+        {!loading && activeTab === 'dashboard' && (
           <div className="space-y-8">
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -248,7 +446,7 @@ export default function KitchenManager() {
         )}
 
         {/* Station Flows Tab */}
-        {activeTab === 'station-flows' && (
+        {!loading && activeTab === 'station-flows' && (
           <div className="space-y-8">
             <div className="bg-white rounded-lg border border-neutral-200 p-6">
               <div className="flex items-center space-x-2 mb-6">
@@ -274,26 +472,45 @@ export default function KitchenManager() {
 
               {/* Flow Title */}
               <div className="mb-6">
-                <h3 className="text-lg font-medium text-neutral-900 mb-2">Editing Flow: Classic Spaghetti Bolognese</h3>
-                <p className="text-sm text-neutral-600">Add Station to Flow</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-medium text-neutral-900 mb-2">Station Flow Management</h3>
+                    <p className="text-sm text-neutral-600">Create workflow sequences for your recipes</p>
+                  </div>
+                  <button
+                    onClick={openFlowModal}
+                    className="bg-neutral-900 text-white px-4 py-2 rounded-lg hover:bg-neutral-800 transition-colors flex items-center space-x-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Create Flow</span>
+                  </button>
+                </div>
               </div>
 
               {/* Station Flow Visualization */}
               <div className="bg-neutral-50 rounded-lg p-6 mb-8">
                 <div className="flex items-center justify-center space-x-4 flex-wrap gap-4">
-                  {stationFlows.map((station, index) => (
+                  {stations.length > 0 ? stations.map((station, index) => (
                     <div key={station.id} className="flex items-center space-x-2">
-                      <div className={`${station.color} rounded-lg p-3 text-white flex items-center justify-center min-w-[120px]`}>
+                      <div 
+                        className={`${getStationColor(station.kind)} rounded-lg p-3 text-white flex items-center justify-center min-w-[120px] cursor-pointer hover:opacity-80 transition-opacity`}
+                        onClick={() => openStationModal(station)}
+                        title="Click to configure station"
+                      >
                         <div className="text-center">
-                          <div className="mb-1">{station.icon}</div>
+                          <div className="mb-1">{getStationIcon(station.kind)}</div>
                           <div className="text-xs font-medium">{station.name}</div>
                         </div>
                       </div>
-                      {index < stationFlows.length - 1 && (
+                      {index < stations.length - 1 && (
                         <div className="text-neutral-400">→</div>
                       )}
                     </div>
-                  ))}
+                  )) : (
+                    <div className="text-center py-8 text-neutral-500">
+                      No stations configured yet
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -316,21 +533,95 @@ export default function KitchenManager() {
           </div>
         )}
 
-        {/* Placeholder for other tabs */}
-        {(activeTab === 'recipes' || activeTab === 'menu-builder') && (
+        {/* Recipes Tab */}
+        {!loading && activeTab === 'recipes' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-neutral-900">Recipe Management</h2>
+              <button
+                onClick={() => openRecipeModal()}
+                className="bg-neutral-900 text-white px-4 py-2 rounded-lg hover:bg-neutral-800 transition-colors flex items-center space-x-2"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Create Recipe</span>
+              </button>
+            </div>
+
+            {/* Recipe List */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {menuItems.map((item) => (
+                <div key={item.id} className="bg-white border border-neutral-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-medium text-neutral-900">{item.name}</h3>
+                    <span className="text-xs bg-neutral-100 text-neutral-600 px-2 py-1 rounded">
+                      {item.category}
+                    </span>
+                  </div>
+                  <p className="text-sm text-neutral-600 mb-3">{item.description || 'No description'}</p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2 text-sm text-neutral-500">
+                      <Clock className="h-4 w-4" />
+                      <span>{item.avg_prep_minutes || 0} min</span>
+                    </div>
+                    <button
+                      onClick={() => openRecipeModal(item)}
+                      className="text-neutral-600 hover:text-neutral-900 text-sm"
+                    >
+                      Edit Recipe
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Menu Builder Tab */}
+        {!loading && activeTab === 'menu-builder' && (
           <div className="bg-white rounded-lg border border-neutral-200 p-12 text-center">
             <div className="text-neutral-400 mb-4">
-              <BookOpen className="h-12 w-12 mx-auto" />
+              <Utensils className="h-12 w-12 mx-auto" />
             </div>
-            <h3 className="text-lg font-semibold text-neutral-900 mb-2">
-              {activeTab === 'recipes' ? 'Recipes Management' : 'Menu Builder'}
-            </h3>
-            <p className="text-neutral-600">
-              This section is ready for development. Continue prompting to add more functionality.
+            <h3 className="text-lg font-semibold text-neutral-900 mb-2">Menu Builder</h3>
+            <p className="text-neutral-600 mb-4">
+              Build and manage your restaurant menu with drag-and-drop functionality.
             </p>
+            <button
+              onClick={() => openRecipeModal()}
+              className="bg-neutral-900 text-white px-4 py-2 rounded-lg hover:bg-neutral-800 transition-colors"
+            >
+              Start Building Menu
+            </button>
           </div>
         )}
       </main>
+
+      {/* Station Management Modal */}
+      {selectedStation && (
+        <StationManagementModal
+          station={selectedStation}
+          isOpen={showStationModal}
+          onClose={closeStationModal}
+          onSave={saveStation}
+        />
+      )}
+
+      {/* Recipe Builder Modal */}
+      <RecipeBuilderModal
+        recipe={selectedRecipe}
+        isOpen={showRecipeModal}
+        onClose={closeRecipeModal}
+        onSave={saveRecipe}
+      />
+
+      {/* Station Flow Modal */}
+      <StationFlowModal
+        isOpen={showFlowModal}
+        onClose={closeFlowModal}
+        stations={stations}
+        menuItems={menuItems}
+        onSave={saveStationFlows}
+      />
     </div>
   );
 }
