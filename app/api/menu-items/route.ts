@@ -3,16 +3,27 @@ import { GetMenuItemsResponse } from '@shared/api';
 import { dbQuery } from '@server/db';
 
 type MenuItemRow = {
-  id: string;
-  org_id: string;
-  sku: string | null;
-  name: string;
-  category: string | null;
+  itemid: number;
+  sku: string;
+  itemname: string;
+  price: string | number;
+  category: string;
   is_active: boolean;
-  avg_prep_minutes: string | number | null;
-  created_at: Date | string;
-  price: string | number | null;     // if you added price
-  image_path: string | null;         // NEW
+  image_path: string | null;
+};
+
+// Map SKU to image filename
+const getImagePath = (sku: string): string => {
+  const skuToImage: Record<string, string> = {
+    'BURGER': '/menu/burger.png',
+    'FRIES': '/menu/fries.png',
+    'BANANA': '/menu/banana-boat.png',
+    'COFFEE': '/menu/coffee.png',
+    'ICETEA': '/menu/ice-tea.png',
+    'SHAKE': '/menu/milkshake.png',
+  };
+  
+  return skuToImage[sku.toUpperCase()] || '/menu/default.png';
 };
 
 export async function GET(request: NextRequest) {
@@ -38,34 +49,31 @@ export async function GET(request: NextRequest) {
 
     const result = await dbQuery<MenuItemRow>(
       `SELECT
-         id::text,
-         org_id::text,
+         itemid,
          sku,
-         name,
+         itemname,
+         price,
          category,
          is_active,
-         avg_prep_minutes,
-         created_at,
-         price,
          image_path
-       FROM menu_items
+       FROM menuitems
        ${whereClause}
-       ORDER BY created_at DESC`,
+       ORDER BY itemid DESC`,
       values,
     );
 
     const response: GetMenuItemsResponse = {
       menu_items: result.rows.map((row) => ({
-        id: row.id,
-        org_id: row.org_id,
-        sku: row.sku ?? undefined,
-        name: row.name,
-        category: row.category ?? undefined,
+        id: row.itemid.toString(),
+        org_id: '1',
+        sku: row.sku,
+        name: row.itemname,
+        category: row.category,
         is_active: row.is_active,
-        avg_prep_minutes: row.avg_prep_minutes !== null ? Number(row.avg_prep_minutes) : undefined,
-        created_at: row.created_at instanceof Date ? row.created_at.toISOString() : new Date(row.created_at).toISOString(),
-        price: row.price !== null ? Number(row.price) : undefined,
-        image_path: row.image_path ?? undefined, // NEW
+        avg_prep_minutes: undefined,
+        created_at: new Date().toISOString(),
+        price: Number(row.price),
+        image_path: row.image_path || getImagePath(row.sku), // Use DB value or map from SKU
       })),
     };
 
