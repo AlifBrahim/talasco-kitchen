@@ -61,7 +61,7 @@ export default function KitchenDisplay() {
         setLoading(true);
         setError(null);
         
-        const response = await fetch('/api/orders?status=in_progress,ready');
+        const response = await fetch('/api/orders/simple?status=in_progress,ready');
         if (!response.ok) {
           throw new Error('Failed to fetch orders');
         }

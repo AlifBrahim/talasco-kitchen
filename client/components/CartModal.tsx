@@ -1,7 +1,6 @@
 "use client";
 import React, { useState } from 'react';
-import { X, Plus, Minus, Trash2, ShoppingCart, CreditCard, User, MapPin, Clock } from 'lucide-react';
-import { CreateOrderRequest } from '@shared/api';
+import { X, Plus, Minus, Trash2, ShoppingCart, CreditCard, User, MapPin, Clock, Utensils } from 'lucide-react';
 
 interface CartItem {
   id: string;
@@ -68,27 +67,16 @@ export default function CartModal({
 
     setIsCheckingOut(true);
     try {
-      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      const invalidItem = cartItems.find(item => !uuidPattern.test(item.menuItemId));
-      if (invalidItem) {
-        alert('Menu was refreshed. Please re-add items to your cart.');
-        setIsCheckingOut(false);
-        return;
-      }
-
-      const orderRequest: CreateOrderRequest = {
-        location_id: 'loc-1', // Default location - in real app, get from context
-        source: orderType,
-        table_number: orderType === 'dine_in' ? customerInfo.tableNumber : undefined,
-        customer_name: customerInfo.name || undefined,
+      // Prepare order request for your simple API
+      const orderRequest = {
+        tableNumber: orderType === 'dine_in' ? customerInfo.tableNumber : undefined,
         items: cartItems.map(item => ({
-          menu_item_id: item.menuItemId,
-          qty: item.quantity,
-          notes: item.specialInstructions || customerInfo.specialRequests || undefined
+          itemId: parseInt(item.id), // Convert to integer for your schema
+          quantity: item.quantity
         }))
       };
 
-      const response = await fetch('/api/orders/checkout', {
+      const response = await fetch('/api/orders/place', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -108,7 +96,7 @@ export default function CartModal({
       onClose();
       
       // Show success message
-      alert('Order placed successfully!');
+      alert(`Order placed successfully! Order ID: ${orderData.orderId}`);
       
     } catch (error) {
       console.error('Error creating order:', error);
@@ -149,22 +137,58 @@ export default function CartModal({
               <p className="text-neutral-600">Add some delicious items to get started!</p>
             </div>
           ) : (
-            <div className="space-y-6">
-              {/* Order Type */}
-              <div>
+            <>
+              {/* Cart Items */}
+              <div className="space-y-4 mb-6">
+                {cartItems.map((item) => (
+                  <div key={item.id} className="flex items-center space-x-4 p-4 bg-neutral-50 rounded-lg">
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-neutral-900">{item.name}</h4>
+                      <p className="text-sm text-neutral-600">${item.price.toFixed(2)} each</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => onUpdateCart(item.id, Math.max(0, item.quantity - 1))}
+                        className="p-1 hover:bg-neutral-200 rounded"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </button>
+                      <span className="w-8 text-center font-medium">{item.quantity}</span>
+                      <button
+                        onClick={() => onUpdateCart(item.id, item.quantity + 1)}
+                        className="p-1 hover:bg-neutral-200 rounded"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-neutral-900">${(item.price * item.quantity).toFixed(2)}</p>
+                      <button
+                        onClick={() => onRemoveFromCart(item.id)}
+                        className="text-red-600 hover:text-red-800 mt-1"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Order Type Selection */}
+              <div className="mb-6">
                 <h3 className="text-lg font-semibold text-neutral-900 mb-3">Order Type</h3>
                 <div className="grid grid-cols-3 gap-3">
                   {[
-                    { value: 'dine_in', label: 'Dine In', icon: <MapPin className="h-4 w-4" /> },
-                    { value: 'pickup', label: 'Pickup', icon: <ShoppingCart className="h-4 w-4" /> },
-                    { value: 'delivery', label: 'Delivery', icon: <Clock className="h-4 w-4" /> }
-                  ].map(({ value, label, icon }) => (
+                    { key: 'dine_in', label: 'Dine In', icon: <Utensils className="h-5 w-5" /> },
+                    { key: 'pickup', label: 'Pickup', icon: <Clock className="h-5 w-5" /> },
+                    { key: 'delivery', label: 'Delivery', icon: <MapPin className="h-5 w-5" /> }
+                  ].map(({ key, label, icon }) => (
                     <button
-                      key={value}
-                      onClick={() => setOrderType(value as any)}
-                      className={`p-3 rounded-lg border-2 flex items-center justify-center space-x-2 transition-colors ${
-                        orderType === value
-                          ? 'border-neutral-900 bg-neutral-900 text-white'
+                      key={key}
+                      onClick={() => setOrderType(key as any)}
+                      className={`p-3 border-2 rounded-lg flex flex-col items-center space-y-2 transition-colors ${
+                        orderType === key
+                          ? 'border-neutral-900 bg-neutral-50'
                           : 'border-neutral-200 hover:border-neutral-300'
                       }`}
                     >
@@ -176,144 +200,106 @@ export default function CartModal({
               </div>
 
               {/* Customer Information */}
-              <div>
+              <div className="mb-6">
                 <h3 className="text-lg font-semibold text-neutral-900 mb-3">Customer Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-2">Name</label>
-                    <input
-                      type="text"
-                      value={customerInfo.name}
-                      onChange={(e) => setCustomerInfo(prev => ({ ...prev, name: e.target.value }))}
-                      className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-500"
-                      placeholder="Enter your name"
-                    />
+                    <label className="block text-sm font-medium text-neutral-700 mb-1">
+                      Name
+                    </label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
+                      <input
+                        type="text"
+                        value={customerInfo.name}
+                        onChange={(e) => setCustomerInfo(prev => ({ ...prev, name: e.target.value }))}
+                        className="w-full pl-10 pr-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-500"
+                        placeholder="Enter your name"
+                      />
+                    </div>
                   </div>
+
                   {orderType === 'dine_in' && (
                     <div>
-                      <label className="block text-sm font-medium text-neutral-700 mb-2">Table Number</label>
+                      <label className="block text-sm font-medium text-neutral-700 mb-1">
+                        Table Number
+                      </label>
                       <input
                         type="text"
                         value={customerInfo.tableNumber}
                         onChange={(e) => setCustomerInfo(prev => ({ ...prev, tableNumber: e.target.value }))}
-                        className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-500"
-                        placeholder="Table number"
+                        className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-500"
+                        placeholder="Enter table number"
                       />
                     </div>
                   )}
-                  {orderType === 'delivery' && (
-                    <div>
-                      <label className="block text-sm font-medium text-neutral-700 mb-2">Phone</label>
-                      <input
-                        type="tel"
-                        value={customerInfo.phone}
-                        onChange={(e) => setCustomerInfo(prev => ({ ...prev, phone: e.target.value }))}
-                        className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-500"
-                        placeholder="Phone number"
-                      />
-                    </div>
-                  )}
-                </div>
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-neutral-700 mb-2">Special Requests</label>
-                  <textarea
-                    value={customerInfo.specialRequests}
-                    onChange={(e) => setCustomerInfo(prev => ({ ...prev, specialRequests: e.target.value }))}
-                    className="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-500 resize-none"
-                    rows={3}
-                    placeholder="Any special requests or dietary restrictions?"
-                  />
-                </div>
-              </div>
 
-              {/* Cart Items */}
-              <div>
-                <h3 className="text-lg font-semibold text-neutral-900 mb-3">Order Items</h3>
-                <div className="space-y-3">
-                  {cartItems.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between p-3 border border-neutral-200 rounded-lg">
-                      <div className="flex-1">
-                        <h4 className="font-medium text-neutral-900">{item.name}</h4>
-                        <p className="text-sm text-neutral-600">${item.price.toFixed(2)} each</p>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => onUpdateCart(item.id, item.quantity - 1)}
-                            className="w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center"
-                          >
-                            <Minus className="h-4 w-4" />
-                          </button>
-                          <span className="w-8 text-center font-medium">{item.quantity}</span>
-                          <button
-                            onClick={() => onUpdateCart(item.id, item.quantity + 1)}
-                            className="w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center"
-                          >
-                            <Plus className="h-4 w-4" />
-                          </button>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-medium text-neutral-900">
-                            ${(item.price * item.quantity).toFixed(2)}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => onRemoveFromCart(item.id)}
-                          className="text-red-600 hover:text-red-800 p-1"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 mb-1">
+                      Phone Number
+                    </label>
+                    <input
+                      type="tel"
+                      value={customerInfo.phone}
+                      onChange={(e) => setCustomerInfo(prev => ({ ...prev, phone: e.target.value }))}
+                      className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-500"
+                      placeholder="Enter phone number"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 mb-1">
+                      Special Requests
+                    </label>
+                    <textarea
+                      value={customerInfo.specialRequests}
+                      onChange={(e) => setCustomerInfo(prev => ({ ...prev, specialRequests: e.target.value }))}
+                      className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-500"
+                      placeholder="Any special instructions..."
+                      rows={3}
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Order Summary */}
-              <div className="bg-neutral-50 rounded-lg p-4">
-                <h3 className="font-medium text-neutral-900 mb-3">Order Summary</h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Subtotal</span>
-                    <span>${subtotal.toFixed(2)}</span>
+              <div className="border-t border-neutral-200 pt-6">
+                <div className="space-y-2 mb-4">
+                  <div className="flex justify-between">
+                    <span className="text-neutral-600">Subtotal</span>
+                    <span className="font-medium">${subtotal.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Tax (8%)</span>
-                    <span>${tax.toFixed(2)}</span>
+                  <div className="flex justify-between">
+                    <span className="text-neutral-600">Tax (8%)</span>
+                    <span className="font-medium">${tax.toFixed(2)}</span>
                   </div>
-                  <div className="border-t border-neutral-200 pt-2">
-                    <div className="flex justify-between font-medium text-lg">
-                      <span>Total</span>
-                      <span>${total.toFixed(2)}</span>
-                    </div>
+                  <div className="flex justify-between text-lg font-bold border-t pt-2">
+                    <span>Total</span>
+                    <span>${total.toFixed(2)}</span>
                   </div>
                 </div>
+
+                {/* Action Buttons */}
+                <div className="flex space-x-3">
+                  <button
+                    onClick={onClearCart}
+                    className="flex-1 px-4 py-3 border border-neutral-300 text-neutral-700 rounded-lg font-medium hover:bg-neutral-50 transition-colors"
+                  >
+                    Clear Cart
+                  </button>
+                  <button
+                    onClick={handleCheckout}
+                    disabled={isCheckingOut || cartItems.length === 0}
+                    className="flex-2 px-6 py-3 bg-neutral-900 text-white rounded-lg font-medium hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                  >
+                    <CreditCard className="h-5 w-5" />
+                    <span>{isCheckingOut ? 'Placing Order...' : 'Place Order'}</span>
+                  </button>
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
-
-        {/* Footer */}
-        {cartItems.length > 0 && (
-          <div className="bg-neutral-50 px-6 py-4 border-t border-neutral-200 rounded-b-lg">
-            <div className="flex items-center justify-between">
-              <button
-                onClick={onClearCart}
-                className="text-neutral-600 hover:text-neutral-800 text-sm"
-              >
-                Clear Cart
-              </button>
-              <button
-                onClick={handleCheckout}
-                disabled={isCheckingOut}
-                className="px-6 py-3 bg-neutral-900 text-white rounded-lg hover:bg-neutral-800 transition-colors flex items-center space-x-2 disabled:opacity-50"
-              >
-                <CreditCard className="h-4 w-4" />
-                <span>{isCheckingOut ? 'Processing...' : 'Place Order'}</span>
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
