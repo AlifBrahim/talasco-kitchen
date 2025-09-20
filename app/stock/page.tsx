@@ -22,13 +22,13 @@ export default function StockPage() {
 
   const stats = useMemo(() => {
     const total = items.length;
-    const low = items.filter(i => computeStatus(i) === 'low').length;
-    const out = items.filter(i => computeStatus(i) === 'out').length;
+    const low = items.filter((i: InventoryItem) => computeStatus(i) === 'low').length;
+    const out = items.filter((i: InventoryItem) => computeStatus(i) === 'out').length;
     return { total, low, out };
   }, [items]);
 
   const filtered = useMemo(() => {
-    return items.filter(i => {
+    return items.filter((i: InventoryItem) => {
       const matchesQ = q.trim().length === 0 || `${i.name} ${i.category}`.toLowerCase().includes(q.toLowerCase());
       const matchesCat = cat === 'all' || i.category === cat;
       const s = computeStatus(i);
@@ -42,10 +42,10 @@ export default function StockPage() {
   }
 
   function upsertItem(newItem: InventoryItem) {
-    setItems(prev => {
-      const idx = prev.findIndex(x => x.id === newItem.id);
+    setItems((prev: InventoryItem[]) => {
+      const idx = prev.findIndex((x: InventoryItem) => x.id === newItem.id);
       if (idx === -1) return [newItem, ...prev];
-      const next = [...prev];
+      const next: InventoryItem[] = [...prev];
       next[idx] = newItem;
       return next;
     });
@@ -72,7 +72,7 @@ export default function StockPage() {
           <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={q}
-            onChange={e => setQ(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQ(e.target.value)}
             placeholder="Search items..."
             className="pl-8 w-64"
           />
@@ -86,7 +86,7 @@ export default function StockPage() {
           </SelectContent>
         </Select>
 
-        <Select value={status} onValueChange={(v: StatusFilter) => setStatus(v)}>
+        <Select value={status} onValueChange={(v: string) => setStatus(v as StatusFilter)}>
           <SelectTrigger className="w-40"><SelectValue placeholder="All Items" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Items</SelectItem>
@@ -105,7 +105,7 @@ export default function StockPage() {
 
       {/* Grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.map(item => (
+        {filtered.map((item: InventoryItem) => (
           <StockCard
             key={item.id}
             item={item}
@@ -184,28 +184,28 @@ function AddItemDialog({ onSave }: { onSave: (i: InventoryItem) => void }) {
           <div className="grid grid-cols-2 gap-3">
             <label className="grid gap-1 text-sm">
               <span>Quantity</span>
-              <Input type="number" value={draft.qty} onChange={e => setDraft({ ...draft, qty: Number(e.target.value) })} />
+              <Input type="number" value={draft.qty} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDraft({ ...draft, qty: Number(e.target.value) })} />
             </label>
             <label className="grid gap-1 text-sm">
               <span>Unit</span>
-              <Input value={draft.unit} onChange={e => setDraft({ ...draft, unit: e.target.value })} />
+              <Input value={draft.unit} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDraft({ ...draft, unit: e.target.value })} />
             </label>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="grid gap-1 text-sm">
               <span>Min Level</span>
-              <Input type="number" value={draft.minLevel} onChange={e => setDraft({ ...draft, minLevel: Number(e.target.value) })} />
+              <Input type="number" value={draft.minLevel} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDraft({ ...draft, minLevel: Number(e.target.value) })} />
             </label>
             <label className="grid gap-1 text-sm">
               <span>Location</span>
-              <Input value={draft.location} onChange={e => setDraft({ ...draft, location: e.target.value })} />
+              <Input value={draft.location} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDraft({ ...draft, location: e.target.value })} />
             </label>
           </div>
 
           <label className="grid gap-1 text-sm">
             <span>Category</span>
-            <Select value={draft.category} onValueChange={(v) => setDraft({ ...draft, category: v as any })}>
+            <Select value={draft.category} onValueChange={(v: string) => setDraft({ ...draft, category: v as any })}>
               <SelectTrigger><SelectValue placeholder="Pick category" /></SelectTrigger>
               <SelectContent>
                 {CATEGORIES.map(c => <SelectItem key={c} value={c}>{cap(c)}</SelectItem>)}
