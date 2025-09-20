@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from 'react';
-import { X, Plus, Minus, Trash2, ShoppingCart, CreditCard, User, MapPin, Clock, Utensils } from 'lucide-react';
+import { X, Plus, Minus, Trash2, ShoppingCart, CreditCard } from 'lucide-react';
 
 interface CartItem {
   id: string;
@@ -31,13 +31,7 @@ export default function CartModal({
   onRemoveFromCart, 
   onClearCart 
 }: CartModalProps) {
-  const [customerInfo, setCustomerInfo] = useState({
-    name: '',
-    tableNumber: '',
-    phone: '',
-    specialRequests: ''
-  });
-  const [orderType, setOrderType] = useState<'dine_in' | 'pickup' | 'delivery'>('dine_in');
+  const [tableNumber, setTableNumber] = useState('');
   const [isCheckingOut, setIsCheckingOut] = useState(false);
 
   if (!isOpen) return null;
@@ -69,7 +63,7 @@ export default function CartModal({
     try {
       // Prepare order request for your simple API
       const orderRequest = {
-        tableNumber: orderType === 'dine_in' ? customerInfo.tableNumber : undefined,
+        tableNumber: tableNumber || undefined,
         items: cartItems.map(item => ({
           itemId: parseInt(item.id), // Convert to integer for your schema
           quantity: item.quantity
@@ -93,6 +87,7 @@ export default function CartModal({
       
       // Clear cart and close modal
       onClearCart();
+      setTableNumber(''); // Reset table number
       onClose();
       
       // Show success message
@@ -174,92 +169,19 @@ export default function CartModal({
                 ))}
               </div>
 
-              {/* Order Type Selection */}
+              {/* Table Number Input */}
               <div className="mb-6">
-                <h3 className="text-lg font-semibold text-neutral-900 mb-3">Order Type</h3>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { key: 'dine_in', label: 'Dine In', icon: <Utensils className="h-5 w-5" /> },
-                    { key: 'pickup', label: 'Pickup', icon: <Clock className="h-5 w-5" /> },
-                    { key: 'delivery', label: 'Delivery', icon: <MapPin className="h-5 w-5" /> }
-                  ].map(({ key, label, icon }) => (
-                    <button
-                      key={key}
-                      onClick={() => setOrderType(key as any)}
-                      className={`p-3 border-2 rounded-lg flex flex-col items-center space-y-2 transition-colors ${
-                        orderType === key
-                          ? 'border-neutral-900 bg-neutral-50'
-                          : 'border-neutral-200 hover:border-neutral-300'
-                      }`}
-                    >
-                      {icon}
-                      <span className="text-sm font-medium">{label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Customer Information */}
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold text-neutral-900 mb-3">Customer Information</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-1">
-                      Name
-                    </label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
-                      <input
-                        type="text"
-                        value={customerInfo.name}
-                        onChange={(e) => setCustomerInfo(prev => ({ ...prev, name: e.target.value }))}
-                        className="w-full pl-10 pr-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-500"
-                        placeholder="Enter your name"
-                      />
-                    </div>
-                  </div>
-
-                  {orderType === 'dine_in' && (
-                    <div>
-                      <label className="block text-sm font-medium text-neutral-700 mb-1">
-                        Table Number
-                      </label>
-                      <input
-                        type="text"
-                        value={customerInfo.tableNumber}
-                        onChange={(e) => setCustomerInfo(prev => ({ ...prev, tableNumber: e.target.value }))}
-                        className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-500"
-                        placeholder="Enter table number"
-                      />
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-1">
-                      Phone Number
-                    </label>
-                    <input
-                      type="tel"
-                      value={customerInfo.phone}
-                      onChange={(e) => setCustomerInfo(prev => ({ ...prev, phone: e.target.value }))}
-                      className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-500"
-                      placeholder="Enter phone number"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-700 mb-1">
-                      Special Requests
-                    </label>
-                    <textarea
-                      value={customerInfo.specialRequests}
-                      onChange={(e) => setCustomerInfo(prev => ({ ...prev, specialRequests: e.target.value }))}
-                      className="w-full px-4 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-500"
-                      placeholder="Any special instructions..."
-                      rows={3}
-                    />
-                  </div>
-                </div>
+                <label className="block text-lg font-semibold text-neutral-900 mb-3">
+                  Table Number
+                </label>
+                <input
+                  type="text"
+                  value={tableNumber}
+                  onChange={(e) => setTableNumber(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:border-neutral-500 text-lg"
+                  placeholder="Enter your table number"
+                />
+                <p className="text-sm text-neutral-500 mt-2">Enter the table number where you're seated</p>
               </div>
 
               {/* Order Summary */}
