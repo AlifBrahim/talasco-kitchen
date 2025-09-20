@@ -1,26 +1,14 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import Image, { type StaticImageData } from 'next/image';
-import pizzaImg from '@/images/C2sRSNqBHLde2DpstxMafqv3hr5KrNWGIs24MW-YS00/31536000.1789786010913.ueMnJoYFOXgEAnn1j034SMwP_UQuQAPziw1UQ_YyLxE.WyHdITSk1tPZtHUiyZP9Qej1jGZ6My-LbOWOfnbhOh0.webp';
-import saladImg from '@/images/Tf7NmhS3Z1K-mtZ5GGfp4cFoggLR-IuegFJdW3APIJk/31536000.1789786010313.f4JxLiMcdM1po26hHmK3L96d6w-aWlUmbsGKvbdmIrU.BURmQFSYXt-2hhbxR3EPJ4Ah1iZthd66LmC6zUsFAWU.webp';
-import pastaImg from '@/images/zoUDy0rRxPFl_KbW_85eCIZitbpAO6jI0F778aT6oHk/31536000.1789786010288.OOU3zQYY4rnhjdyz90n1ArueZIQ_Z3PxQoKL1kf2nHI.QyPbiG99cwRMGcYilFShrKTy65kT2Om95R3nYMR8J0Y.webp';
-import burgerImg from '@/images/3RwYYDYE9aPqya-MaXQCY8lTyX4JRDDnCGkvrc4JKE0/31536000.1789786010585.Jc9TO6EPl-F7RCs33AX5CT31zGjgEJOHXdS6jzgf3SQ.2N1Fni1xsCXP-j7fDUTV-seAQVTQKNF2UT4eZ0PUPuM.webp';
 import { ShoppingCart, Utensils, Plus, Monitor, ChefHat, Loader2, Eye } from 'lucide-react';
 import Link from 'next/link';
 import { MenuItem as DBMenuItem, GetMenuItemsResponse } from '@shared/api';
 import MenuItemModal from '@/components/MenuItemModal';
 import CartModal from '@/components/CartModal';
 
-// Image mapping for menu items
-const imageMap: Record<string, any> = {
-  '1': pizzaImg,
-  '2': saladImg,
-  '3': pastaImg,
-  '4': burgerImg,
-};
-
 // Default image for items without specific images
-const defaultImage = pizzaImg;
+const defaultImage = '/placeholder.svg';
 
 interface MenuItem {
   id: string;
@@ -65,8 +53,8 @@ export default function Index() {
           id: dbItem.id,
           name: dbItem.name,
           description: `Delicious ${dbItem.name.toLowerCase()}`, // Generate description
-          price: 15.99, // Default price - would come from database in real app
-          image: imageMap[dbItem.id] || defaultImage,
+          price: dbItem.price ?? 0,
+          image: dbItem.image_path || defaultImage,  // ← use path from DB
           category: mapCategoryToUI(dbItem.category),
           badge: dbItem.category === 'Pizza' ? 'Veg' : undefined,
           avg_prep_minutes: dbItem.avg_prep_minutes
@@ -286,7 +274,7 @@ export default function Index() {
             <div key={item.id} className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden hover:shadow-md transition-shadow">
               <div className="relative">
                 <Image
-                  src={item.image}
+                  src={item.image}   // expects '/...' under public
                   alt={item.name}
                   width={600}
                   height={400}
@@ -302,7 +290,7 @@ export default function Index() {
                 <h3 className="font-semibold text-lg text-neutral-900 mb-2">{item.name}</h3>
                 <p className="text-sm text-neutral-600 mb-4 line-clamp-2">{item.description}</p>
                 <div className="flex items-center justify-between">
-                  <span className="text-xl font-bold text-neutral-900">${item.price}</span>
+                  <span className="text-xl font-bold text-neutral-900">RM{item.price}</span>
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => openItemModal(item)}

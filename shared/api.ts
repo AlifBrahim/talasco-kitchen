@@ -59,6 +59,8 @@ export interface MenuItem {
   is_active: boolean;
   avg_prep_minutes?: number;
   created_at: string;
+  price?: number;        // if you also store price
+  image_path?: string;   // NEW: public path like '/menu/burger.png'
 }
 
 export interface Ingredient {

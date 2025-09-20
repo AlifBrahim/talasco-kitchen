@@ -11,6 +11,8 @@ type MenuItemRow = {
   is_active: boolean;
   avg_prep_minutes: string | number | null;
   created_at: Date | string;
+  price: string | number | null;     // if you added price
+  image_path: string | null;         // NEW
 };
 
 export async function GET(request: NextRequest) {
@@ -43,7 +45,9 @@ export async function GET(request: NextRequest) {
          category,
          is_active,
          avg_prep_minutes,
-         created_at
+         created_at,
+         price,
+         image_path
        FROM menu_items
        ${whereClause}
        ORDER BY created_at DESC`,
@@ -59,10 +63,9 @@ export async function GET(request: NextRequest) {
         category: row.category ?? undefined,
         is_active: row.is_active,
         avg_prep_minutes: row.avg_prep_minutes !== null ? Number(row.avg_prep_minutes) : undefined,
-        created_at:
-          row.created_at instanceof Date
-            ? row.created_at.toISOString()
-            : new Date(row.created_at).toISOString(),
+        created_at: row.created_at instanceof Date ? row.created_at.toISOString() : new Date(row.created_at).toISOString(),
+        price: row.price !== null ? Number(row.price) : undefined,
+        image_path: row.image_path ?? undefined, // NEW
       })),
     };
 
