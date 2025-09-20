@@ -4,7 +4,7 @@ import {
 } from '@shared/api';
 import { getClient } from '@server/db';
 
-const ORDER_STATUS_DEFAULT = 'open';
+const ORDER_STATUS_DEFAULT = 'in_progress';
 // Accept generic hyphenated UUIDs (v1..v8, including v7 used by some libs)
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

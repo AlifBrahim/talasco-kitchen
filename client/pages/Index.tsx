@@ -291,22 +291,13 @@ export default function Index() {
                 <p className="text-sm text-neutral-600 mb-4 line-clamp-2">{item.description}</p>
                 <div className="flex items-center justify-between">
                   <span className="text-xl font-bold text-neutral-900">RM{item.price}</span>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => openItemModal(item)}
-                      className="bg-neutral-100 text-neutral-700 px-3 py-2 rounded-lg flex items-center space-x-1 hover:bg-neutral-200 transition-colors"
-                    >
-                      <Eye className="h-4 w-4" />
-                      <span className="text-sm font-medium">View</span>
-                    </button>
-                    <button
-                      onClick={() => addToCart(item.id)}
-                      className="bg-neutral-900 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-neutral-800 transition-colors"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span className="text-sm font-medium">Add</span>
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => addToCart(item.id)}
+                    className="bg-neutral-900 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-neutral-800 transition-colors"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span className="text-sm font-medium">Add</span>
+                  </button>
                 </div>
               </div>
             </div>
