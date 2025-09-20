@@ -1,141 +1,124 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  OrderItem,
-  UpdateOrderItemStatusRequest,
-  UpdateOrderItemStatusResponse,
-} from '@shared/api';
 import { dbQuery } from '@server/db';
 
-function mapOrderStatusToTicket(status: OrderItem['status']): 'queued' | 'firing' | 'prepping' | 'ready' | 'passed' | 'cancelled' {
-  switch (status) {
-    case 'served':
-      return 'ready';
-    case 'passed':
-      return 'passed';
-    case 'cancelled':
-      return 'cancelled';
-    case 'queued':
-    case 'firing':
-    case 'prepping':
-    default:
-      return status;
-  }
-}
-
-function toIso(value: Date | string | null | undefined): string | undefined {
-  if (!value) return undefined;
-  if (value instanceof Date) return value.toISOString();
-  return new Date(value).toISOString();
+interface UpdateStatusRequest {
+  status: 'queued' | 'prepping' | 'ready' | 'served' | 'cancelled';
 }
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { orderId: string; itemId: string } },
+  { params }: { params: { orderId: string; itemId: string } }
 ) {
   try {
-    const body: UpdateOrderItemStatusRequest = await request.json();
     const { orderId, itemId } = params;
-
-    if (!body.status) {
-      return NextResponse.json(
-        { error: 'Status is required' },
-        { status: 400 },
-      );
+    const body: UpdateStatusRequest = await request.json();
+    
+    // Parse itemId - handle both formats: "6" or "7-6" 
+    let actualItemId: number;
+    if (itemId.includes('-')) {
+      // Format is "orderId-itemId", extract the itemId part
+      actualItemId = parseInt(itemId.split('-')[1]);
+    } else {
+      // Format is just itemId
+      actualItemId = parseInt(itemId);
     }
+    
+    const actualOrderId = parseInt(orderId);
+    
+    console.log('Updating order item:', { 
+      orderId: actualOrderId, 
+      itemId: actualItemId, 
+      status: body.status,
+      originalItemId: itemId 
+    });
 
-    const result = await dbQuery<{
-      id: string;
-      order_id: string;
-      menu_item_id: string;
-      qty: number;
-      notes: string | null;
-      status: OrderItem['status'];
-      predicted_prep_minutes: string | number | null;
-      actual_prep_seconds: number | null;
-      created_at: Date;
-      started_at: Date | null;
-      completed_at: Date | null;
-    }>(
-      `UPDATE order_items
-         SET status = $1,
-             started_at = CASE
-               WHEN $1 IN ('firing', 'prepping') AND started_at IS NULL THEN NOW()
-               ELSE started_at
-             END,
-             completed_at = CASE
-               WHEN $1 IN ('served', 'cancelled', 'passed') THEN NOW()
-               ELSE completed_at
-             END
-       WHERE id = $2::uuid AND order_id = $3::uuid
-       RETURNING
-         id::text,
-         order_id::text,
-         menu_item_id::text,
-         qty,
-         notes,
-         status,
-         predicted_prep_minutes,
-         actual_prep_seconds,
-         created_at,
-         started_at,
-         completed_at`,
-      [body.status, itemId, orderId],
+    // First check if the record exists
+    const checkResult = await dbQuery(
+      'SELECT * FROM orderitems WHERE orderid = $1 AND itemid = $2',
+      [actualOrderId, actualItemId]
     );
 
-    if (result.rowCount === 0) {
+    console.log('Found records:', checkResult.rows);
+
+    if (checkResult.rowCount === 0) {
+      // Let's see what records actually exist for this order
+      const allItemsResult = await dbQuery(
+        'SELECT orderid, itemid FROM orderitems WHERE orderid = $1',
+        [actualOrderId]
+      );
+      
+      console.log('All items for order:', allItemsResult.rows);
+      
       return NextResponse.json(
-        { error: 'Order item not found' },
-        { status: 404 },
+        { 
+          error: `Order item not found: orderId=${actualOrderId}, itemId=${actualItemId}`,
+          availableItems: allItemsResult.rows,
+          requestedItem: { orderId: actualOrderId, itemId: actualItemId }
+        },
+        { status: 404 }
       );
     }
 
-    const orderItem = result.rows[0];
+    // Build update query based on status
+    let updateQuery = 'UPDATE orderitems SET status = $1';
+    const values: any[] = [body.status];
+    let paramCount = 1;
 
-    if (body.station_id) {
-      const ticketStatus = mapOrderStatusToTicket(body.status);
-      await dbQuery(
-        `UPDATE kds_tickets
-           SET status = $1,
-               started_at = CASE
-                 WHEN $1 IN ('firing', 'prepping') AND started_at IS NULL THEN NOW()
-                 ELSE started_at
-               END,
-               completed_at = CASE
-                 WHEN $1 IN ('ready', 'passed', 'cancelled') THEN NOW()
-                 ELSE completed_at
-               END
-         WHERE order_item_id = $2::uuid
-           AND station_id = $3::uuid`,
-        [ticketStatus, itemId, body.station_id],
-      );
+    // Set timestamps based on status
+    if (body.status === 'prepping') {
+      // Check if it already has started_at
+      if (!checkResult.rows[0]?.started_at) {
+        updateQuery += `, started_at = CURRENT_TIMESTAMP`;
+      }
+    } else if (['ready', 'served'].includes(body.status)) {
+      updateQuery += `, completed_at = CURRENT_TIMESTAMP`;
     }
 
-    const response: UpdateOrderItemStatusResponse = {
+    updateQuery += ` WHERE orderid = $${++paramCount} AND itemid = $${++paramCount} RETURNING *`;
+    values.push(actualOrderId, actualItemId);
+
+    const result = await dbQuery(updateQuery, values);
+
+    // Update order status based on item statuses
+    await updateOrderStatus(actualOrderId);
+
+    return NextResponse.json({
       success: true,
-      order_item: {
-        id: orderItem.id,
-        order_id: orderItem.order_id,
-        menu_item_id: orderItem.menu_item_id,
-        qty: orderItem.qty,
-        notes: orderItem.notes ?? undefined,
-        status: orderItem.status,
-        predicted_prep_minutes:
-          orderItem.predicted_prep_minutes !== null
-            ? Number(orderItem.predicted_prep_minutes)
-            : undefined,
-        actual_prep_seconds: orderItem.actual_prep_seconds ?? undefined,
-        created_at: toIso(orderItem.created_at)!,
-        started_at: toIso(orderItem.started_at),
-        completed_at: toIso(orderItem.completed_at),
-      },
-    };
+      orderItem: result.rows[0],
+      message: `Order item status updated to ${body.status}`
+    });
 
-    return NextResponse.json(response);
   } catch (error) {
     console.error('Error updating order item status:', error);
     return NextResponse.json(
-      { error: 'Failed to update order item status' },
-      { status: 500 },
+      { error: 'Failed to update order item status', details: error.message },
+      { status: 500 }
     );
+  }
+}
+
+// Helper function to update order status based on item statuses
+async function updateOrderStatus(orderId: number) {
+  try {
+    const itemsResult = await dbQuery(
+      'SELECT status FROM orderitems WHERE orderid = $1',
+      [orderId]
+    );
+
+    const itemStatuses = itemsResult.rows.map(row => row.status || 'queued');
+    let newOrderStatus = 'in_progress';
+
+    if (itemStatuses.every(status => status === 'served')) {
+      newOrderStatus = 'served';
+    } else if (itemStatuses.some(status => status === 'ready')) {
+      newOrderStatus = 'ready';
+    }
+
+    await dbQuery(
+      'UPDATE orders SET status = $1 WHERE orderid = $2',
+      [newOrderStatus, orderId]
+    );
+  } catch (error) {
+    console.error('Error updating order status:', error);
   }
 }
