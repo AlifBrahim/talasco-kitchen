@@ -189,3 +189,17 @@ export interface UpdateOrderItemStatusResponse {
 export interface DemoResponse {
   message: string;
 }
+
+export interface KSMInventoryItem {
+  id: string;
+  name: string;
+  category?: string | null;
+  quantity: number;
+  unit: string;
+  low: number;
+  updated: string;
+}
+
+export interface GetKSMInventoryResponse {
+  items: KSMInventoryItem[];
+}
