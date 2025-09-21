@@ -11,7 +11,10 @@ import {
   RefreshCw,
   AlertTriangle,
   Save,
-  Check
+  Check,
+  Brain,
+  ShoppingCart,
+  X
 } from 'lucide-react';
 import Link from 'next/link';
 import { GetKSMInventoryResponse } from '@shared/api';
@@ -26,6 +29,18 @@ interface InventoryItem {
   updated: string;
 }
 
+interface AIPrepItem {
+  id: string;
+  name: string;
+  category: string;
+  currentStock: number;
+  unit: string;
+  recommendedQty: number;
+  urgency: 'low' | 'medium' | 'high' | 'critical';
+  reason: string;
+  estimatedCost: number;
+}
+
 export default function KitchenManager() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [ksmSearch, setKsmSearch] = useState('');
@@ -37,6 +52,8 @@ export default function KitchenManager() {
   const [tempQuantity, setTempQuantity] = useState<number>(0);
   const [saving, setSaving] = useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showAIPrepModal, setShowAIPrepModal] = useState(false);
+  const [aiPrepItems, setAiPrepItems] = useState<AIPrepItem[]>([]);
 
   // Fetch KSM data only
   useEffect(() => {
@@ -166,6 +183,101 @@ export default function KitchenManager() {
     setTempQuantity(Math.max(0, numValue));
   };
 
+  const handleAIPrep = () => {
+    // Mock AI Prep data - in real implementation, this would come from AI forecasting
+    const mockAIPrepItems: AIPrepItem[] = [
+      {
+        id: '1',
+        name: 'Beef Patty',
+        category: 'Meat',
+        currentStock: 0,
+        unit: 'kg',
+        recommendedQty: 5,
+        urgency: 'critical',
+        reason: 'Out of stock - urgent for burger orders',
+        estimatedCost: 125.00
+      },
+      {
+        id: '2',
+        name: 'Burger Bun',
+        category: 'Bakery',
+        currentStock: 20,
+        unit: 'pack',
+        recommendedQty: 8,
+        urgency: 'high',
+        reason: 'High demand predicted for weekend rush',
+        estimatedCost: 24.00
+      },
+      {
+        id: '3',
+        name: 'Cheddar Cheese',
+        category: 'Dairy',
+        currentStock: 1,
+        unit: 'kg',
+        recommendedQty: 3,
+        urgency: 'medium',
+        reason: 'Running low, weekend orders expected',
+        estimatedCost: 35.00
+      },
+      {
+        id: '4',
+        name: 'Cooking Oil',
+        category: 'Pantry',
+        currentStock: 1,
+        unit: 'L',
+        recommendedQty: 5,
+        urgency: 'low',
+        reason: 'Prevent stockout during busy period',
+        estimatedCost: 45.00
+      },
+      {
+        id: '5',
+        name: 'Lettuce',
+        category: 'Vegetables',
+        currentStock: 0,
+        unit: 'kg',
+        recommendedQty: 2,
+        urgency: 'critical',
+        reason: 'Fresh produce needed for salads',
+        estimatedCost: 15.00
+      },
+      {
+        id: '6',
+        name: 'Tomatoes',
+        category: 'Vegetables',
+        currentStock: 0.5,
+        unit: 'kg',
+        recommendedQty: 3,
+        urgency: 'high',
+        reason: 'Essential for burgers and salads',
+        estimatedCost: 18.00
+      }
+    ];
+    
+    setAiPrepItems(mockAIPrepItems);
+    setShowAIPrepModal(true);
+  };
+
+  const getUrgencyColor = (urgency: string) => {
+    switch (urgency) {
+      case 'critical': return 'bg-red-100 text-red-800 border-red-200';
+      case 'high': return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'low': return 'bg-green-100 text-green-800 border-green-200';
+      default: return 'bg-neutral-100 text-neutral-800 border-neutral-200';
+    }
+  };
+
+  const getUrgencyIcon = (urgency: string) => {
+    switch (urgency) {
+      case 'critical': return '🔴';
+      case 'high': return '🟠';
+      case 'medium': return '🟡';
+      case 'low': return '🟢';
+      default: return '⚪';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-neutral-50">
       {/* Header */}
@@ -204,9 +316,12 @@ export default function KitchenManager() {
                   <span className="text-sm font-medium">Unsaved changes</span>
                 </div>
               )}
-              <button className="bg-neutral-900 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-neutral-800 transition-colors">
-                <Plus className="h-4 w-4" />
-                <span className="text-sm font-medium">New Item</span>
+              <button 
+                onClick={handleAIPrep}
+                className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl"
+              >
+                <Brain className="h-4 w-4" />
+                <span className="text-sm font-medium">AI Prep Button</span>
               </button>
             </div>
           </div>
@@ -282,11 +397,6 @@ export default function KitchenManager() {
             <div className="bg-white rounded-lg border border-neutral-200 p-4">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                 <div className="flex items-center gap-3">
-                  <button className="bg-neutral-900 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-neutral-800">
-                    <Plus className="h-4 w-4" />
-                    <span className="text-sm font-medium">Add New Item</span>
-                  </button>
-
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
                     <input
@@ -452,6 +562,136 @@ export default function KitchenManager() {
           </div>
         )}
       </main>
+
+      {/* AI Prep Modal - Receipt Style */}
+      {showAIPrepModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-4 text-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <Brain className="h-6 w-6" />
+                  <div>
+                    <h2 className="text-xl font-semibold">AI Shopping List</h2>
+                    <p className="text-purple-100 text-sm">Generated on {new Date().toLocaleDateString()}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAIPrepModal(false)}
+                  className="text-white hover:text-purple-200 transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* Receipt Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              {/* Restaurant Header */}
+              <div className="text-center mb-6 border-b border-neutral-200 pb-4">
+                <h1 className="text-2xl font-bold text-neutral-900">TALASCO KITCHEN</h1>
+                <p className="text-neutral-600">AI-Powered Shopping List</p>
+                <p className="text-sm text-neutral-500">Date: {new Date().toLocaleDateString()} | Time: {new Date().toLocaleTimeString()}</p>
+              </div>
+
+
+              {/* Shopping List - Receipt Style */}
+              <div className="bg-neutral-50 rounded-lg p-4 mb-6">
+                <h3 className="font-bold text-neutral-900 mb-4 text-center">SHOPPING LIST</h3>
+                
+                {/* Receipt Items */}
+                <div className="space-y-2">
+                  {aiPrepItems
+                    .sort((a, b) => {
+                      const urgencyOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+                      return urgencyOrder[a.urgency] - urgencyOrder[b.urgency];
+                    })
+                    .map((item, index) => (
+                    <div key={item.id} className="flex items-center justify-between py-2 border-b border-neutral-200 last:border-b-0">
+                      <div className="flex items-center space-x-3">
+                        <div className="text-sm font-mono text-neutral-500 w-6">
+                          {index + 1}.
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-semibold text-neutral-900">{item.name}</span>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getUrgencyColor(item.urgency)}`}>
+                              {getUrgencyIcon(item.urgency)}
+                            </span>
+                          </div>
+                          <div className="text-xs text-neutral-500">{item.category}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-semibold text-neutral-900">
+                          {item.recommendedQty} {item.unit}
+                        </div>
+                        <div className="text-sm text-neutral-500">
+                          ~${item.estimatedCost.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Receipt Total */}
+                <div className="border-t border-neutral-300 mt-4 pt-4">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-neutral-900">TOTAL ESTIMATED COST:</span>
+                    <span className="font-bold text-2xl text-neutral-900">
+                      ${aiPrepItems.reduce((sum, item) => sum + item.estimatedCost, 0).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Instructions */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <h4 className="font-semibold text-blue-900 mb-2">📋 Instructions for Staff:</h4>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• Check fresh produce quality before purchasing</li>
+                  <li>• Keep receipts for expense tracking</li>
+                  <li>• Update inventory when items arrive</li>
+                </ul>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-4 border-t border-neutral-200">
+                <button
+                  onClick={() => setShowAIPrepModal(false)}
+                  className="px-6 py-2 border border-neutral-300 text-neutral-700 rounded-lg hover:bg-neutral-50 transition-colors"
+                >
+                  Close
+                </button>
+                <div className="flex space-x-3">
+                  <button 
+                    onClick={() => window.print()}
+                    className="px-6 py-2 bg-neutral-100 text-neutral-700 rounded-lg hover:bg-neutral-200 transition-colors flex items-center space-x-2"
+                  >
+                    <Package className="h-4 w-4" />
+                    <span>Print Receipt</span>
+                  </button>
+                  <button 
+                    onClick={() => {
+                      // Copy to clipboard for Foodpanda or other delivery apps
+                      const shoppingList = aiPrepItems
+                        .map(item => `${item.name} - ${item.recommendedQty} ${item.unit}`)
+                        .join('\n');
+                      navigator.clipboard.writeText(shoppingList);
+                      alert('Shopping list copied to clipboard! You can paste this into Foodpanda or any delivery app.');
+                    }}
+                    className="px-6 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all duration-200 flex items-center space-x-2"
+                  >
+                    <ShoppingCart className="h-4 w-4" />
+                    <span>Copy for Foodpanda</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
