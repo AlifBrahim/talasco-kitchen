@@ -17,10 +17,12 @@ interface Order {
   id: string;
   tableNumber?: string;
   customerName?: string;
-  status: 'open' | 'in_progress' | 'ready' | 'served' | 'cancelled';
+  status: 'open' | 'in_progress' | 'ready' | 'served' | 'cancelled' | 'completed';
   items: OrderItem[];
   specialRequests?: string;
   timestamp: string;
+  startedAt?: string;
+  completedAt?: string;
   source: string;
 }
 

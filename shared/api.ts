@@ -88,8 +88,10 @@ export interface Order {
   table_number?: string;
   customer_name?: string;
   placed_at: string;
+  started_at?: string;
+  completed_at?: string;
   promised_at?: string;
-  status: 'open' | 'in_progress' | 'ready' | 'served' | 'cancelled';
+  status: 'open' | 'in_progress' | 'ready' | 'served' | 'cancelled' | 'completed';
 }
 
 export interface OrderItem {

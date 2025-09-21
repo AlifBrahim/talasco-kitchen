@@ -135,39 +135,39 @@ export default function CartModal({
             <>
               {/* Cart Items */}
               <div className="space-y-4 mb-6">
-                {cartItems.map((item) => (
+                  {cartItems.map((item) => (
                   <div key={item.id} className="flex items-center space-x-4 p-4 bg-neutral-50 rounded-lg">
-                    <div className="flex-1">
+                      <div className="flex-1">
                       <h4 className="font-semibold text-neutral-900">{item.name}</h4>
-                      <p className="text-sm text-neutral-600">${item.price.toFixed(2)} each</p>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
+                        <p className="text-sm text-neutral-600">${item.price.toFixed(2)} each</p>
+                      </div>
+                        <div className="flex items-center space-x-2">
+                          <button
                         onClick={() => onUpdateCart(item.id, Math.max(0, item.quantity - 1))}
                         className="p-1 hover:bg-neutral-200 rounded"
-                      >
-                        <Minus className="h-4 w-4" />
-                      </button>
-                      <span className="w-8 text-center font-medium">{item.quantity}</span>
-                      <button
-                        onClick={() => onUpdateCart(item.id, item.quantity + 1)}
+                          >
+                            <Minus className="h-4 w-4" />
+                          </button>
+                          <span className="w-8 text-center font-medium">{item.quantity}</span>
+                          <button
+                            onClick={() => onUpdateCart(item.id, item.quantity + 1)}
                         className="p-1 hover:bg-neutral-200 rounded"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <div className="text-right">
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <div className="text-right">
                       <p className="font-semibold text-neutral-900">${(item.price * item.quantity).toFixed(2)}</p>
-                      <button
-                        onClick={() => onRemoveFromCart(item.id)}
+                        <button
+                          onClick={() => onRemoveFromCart(item.id)}
                         className="text-red-600 hover:text-red-800 mt-1"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
 
               {/* Table Number Input */}
               <div className="mb-6">
@@ -196,31 +196,31 @@ export default function CartModal({
                     <span className="font-medium">${tax.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-lg font-bold border-t pt-2">
-                    <span>Total</span>
-                    <span>${total.toFixed(2)}</span>
-                  </div>
-                </div>
+                      <span>Total</span>
+                      <span>${total.toFixed(2)}</span>
+                    </div>
+        </div>
 
                 {/* Action Buttons */}
                 <div className="flex space-x-3">
-                  <button
-                    onClick={onClearCart}
+              <button
+                onClick={onClearCart}
                     className="flex-1 px-4 py-3 border border-neutral-300 text-neutral-700 rounded-lg font-medium hover:bg-neutral-50 transition-colors"
-                  >
-                    Clear Cart
-                  </button>
-                  <button
-                    onClick={handleCheckout}
+              >
+                Clear Cart
+              </button>
+              <button
+                onClick={handleCheckout}
                     disabled={isCheckingOut || cartItems.length === 0}
                     className="flex-2 px-6 py-3 bg-neutral-900 text-white rounded-lg font-medium hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-                  >
+              >
                     <CreditCard className="h-5 w-5" />
                     <span>{isCheckingOut ? 'Placing Order...' : 'Place Order'}</span>
-                  </button>
-                </div>
-              </div>
+              </button>
+            </div>
+          </div>
             </>
-          )}
+        )}
         </div>
       </div>
     </div>

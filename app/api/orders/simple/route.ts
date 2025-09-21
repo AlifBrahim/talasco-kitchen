@@ -6,6 +6,8 @@ type SimpleOrderRow = {
   tablenumber: string | null;
   status: string;
   orderdate: Date;
+  started_at: Date | null;
+  completed_at: Date | null;
   itemid: number;
   itemname: string;
   quantity: number;
@@ -35,6 +37,8 @@ export async function GET(request: NextRequest) {
         o.tablenumber,
         o.status,
         o.orderdate,
+        o.started_at,
+        o.completed_at,
         oi.itemid,
         m.itemname,
         oi.quantity,
@@ -62,6 +66,8 @@ export async function GET(request: NextRequest) {
           status: row.status,
           source: 'dine_in', // Default since not in your schema
           placed_at: row.orderdate.toISOString(),
+          started_at: row.started_at ? row.started_at.toISOString() : null,
+          completed_at: row.completed_at ? row.completed_at.toISOString() : null,
           promised_at: null,
           order_items: []
         });

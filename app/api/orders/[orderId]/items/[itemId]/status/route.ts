@@ -106,12 +106,17 @@ async function updateOrderStatus(orderId: number) {
     );
 
     const itemStatuses = itemsResult.rows.map(row => row.status || 'queued');
-    let newOrderStatus = 'in_progress';
+    let newOrderStatus = 'open';
 
-    if (itemStatuses.every(status => status === 'served')) {
-      newOrderStatus = 'served';
-    } else if (itemStatuses.some(status => status === 'ready')) {
-      newOrderStatus = 'ready';
+    // Determine order status based on item statuses
+    if (itemStatuses.every(status => status === 'completed')) {
+      newOrderStatus = 'completed';  // All items done
+    } else if (itemStatuses.every(status => status === 'served')) {
+      newOrderStatus = 'served';     // All items served
+    } else if (itemStatuses.every(status => ['ready', 'served', 'completed'].includes(status))) {
+      newOrderStatus = 'ready';      // All items ready or beyond
+    } else if (itemStatuses.some(status => ['prepping', 'ready', 'served'].includes(status))) {
+      newOrderStatus = 'in_progress'; // Some items being worked on
     }
 
     await dbQuery(

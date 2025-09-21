@@ -360,8 +360,8 @@ export default function KitchenManager() {
             {/* Top stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white rounded-lg border border-neutral-200 p-6">
-                <div className="flex items-center justify-between">
-                  <div>
+                  <div className="flex items-center justify-between">
+                    <div>
                     <p className="text-sm font-medium text-neutral-600">Total Items</p>
                     <p className="text-3xl font-bold text-neutral-900">{ksmTotals.total}</p>
                     <p className="text-xs text-neutral-500 mt-1">Items in inventory</p>
@@ -376,7 +376,7 @@ export default function KitchenManager() {
                     <p className="text-sm font-medium text-neutral-600">Low Stock</p>
                     <p className="text-3xl font-bold text-yellow-600">{ksmTotals.low}</p>
                     <p className="text-xs text-neutral-500 mt-1">Need restocking</p>
-                  </div>
+                </div>
                   <AlertTriangle className="h-6 w-6 text-yellow-600" />
                 </div>
               </div>
@@ -387,7 +387,7 @@ export default function KitchenManager() {
                     <p className="text-sm font-medium text-neutral-600">Out of Stock</p>
                     <p className="text-3xl font-bold text-red-600">{ksmTotals.out}</p>
                     <p className="text-xs text-neutral-500 mt-1">Urgent restocking</p>
-                  </div>
+                </div>
                   <AlertTriangle className="h-6 w-6 text-red-600" />
                 </div>
               </div>
@@ -405,8 +405,8 @@ export default function KitchenManager() {
                       placeholder="Search items..."
                       className="w-[240px] pl-9 pr-3 py-2 rounded-lg border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-500"
                     />
-                  </div>
-                </div>
+              </div>
+            </div>
 
                 <div className="flex items-center gap-3">
                   <select
@@ -419,7 +419,7 @@ export default function KitchenManager() {
                     ))}
                   </select>
 
-                  <select
+                <select 
                     value={ksmStatus}
                     onChange={e => setKsmStatus(e.target.value as any)}
                     className="px-3 py-2 rounded-lg border border-neutral-300 text-sm"
@@ -428,7 +428,7 @@ export default function KitchenManager() {
                     <option value="in">In Stock</option>
                     <option value="low">Low Stock</option>
                     <option value="out">Out of Stock</option>
-                  </select>
+                </select>
 
                   <button
                     onClick={resetKsmFilters}
@@ -439,7 +439,7 @@ export default function KitchenManager() {
                   </button>
                 </div>
               </div>
-            </div>
+                        </div>
 
             {/* Items grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -468,7 +468,7 @@ export default function KitchenManager() {
                           {status === 'low' ? 'Low Stock' : 'Out of Stock'}
                         </span>
                       )}
-                    </div>
+              </div>
 
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -509,7 +509,7 @@ export default function KitchenManager() {
                             >
                               ×
                             </button>
-                          </div>
+                </div>
                         ) : (
                           <div 
                             className="text-neutral-900 font-semibold cursor-pointer hover:bg-neutral-50 px-2 py-1 rounded border border-neutral-300 hover:border-blue-400 transition-colors"
@@ -517,18 +517,18 @@ export default function KitchenManager() {
                             title="Click to edit quantity"
                           >
                             {item.quantity} {item.unit}
-                          </div>
-                        )}
-                        
-                        <button
+          </div>
+        )}
+
+              <button
                           onClick={() => adjustQty(item.id, +1)}
                           className="h-8 w-8 rounded-full border border-neutral-300 text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
                           aria-label="Increase"
                           disabled={saving === item.id}
                         >
                           +
-                        </button>
-                      </div>
+              </button>
+            </div>
 
                       <div className="text-right">
                         <div className="text-xs text-neutral-500">
@@ -537,7 +537,7 @@ export default function KitchenManager() {
                         <div className="text-xs text-neutral-400 mt-1">
                           Updated {new Date(item.updated).toLocaleDateString()}
                         </div>
-                      </div>
+                  </div>
                     </div>
                   </div>
                 );
@@ -546,17 +546,17 @@ export default function KitchenManager() {
 
             {/* Empty state */}
             {filteredInventory.length === 0 && !loading && (
-              <div className="bg-white rounded-lg border border-neutral-200 p-12 text-center">
+          <div className="bg-white rounded-lg border border-neutral-200 p-12 text-center">
                 <Package className="h-12 w-12 mx-auto text-neutral-400 mb-4" />
                 <h3 className="text-lg font-semibold text-neutral-900 mb-2">No items found</h3>
-                <p className="text-neutral-600 mb-4">
+            <p className="text-neutral-600 mb-4">
                   {ksmSearch || ksmCategory !== 'All Categories' || ksmStatus !== 'all' 
                     ? 'Try adjusting your filters to see more items.'
                     : 'Start by adding some inventory items to track your stock.'}
                 </p>
                 <button className="bg-neutral-900 text-white px-4 py-2 rounded-lg hover:bg-neutral-800 transition-colors">
                   Add First Item
-                </button>
+            </button>
               </div>
             )}
           </div>
