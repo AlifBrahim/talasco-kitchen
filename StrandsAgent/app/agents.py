@@ -98,12 +98,17 @@ class AgentRegistry:
 
     def build_inventory_controller(self) -> Agent:
         prompt = (
-            "Maintain optimal stock. Review restock recommendations, group by supplier, and draft purchase orders "
-            "with quantities, pricing, and rationale."
+            "You are an inventory controller using Amazon Bedrock. Use tools for facts. "
+            "Task: Decide which ingredients must be purchased for the upcoming month based on the database, then return STRICT JSON only. "
+            "Steps: (1) Call monthly_shopping_list with days=30 to fetch computed usage vs on-hand from the DB (legacy schema). "
+            "(2) Optionally prioritise by urgency and recommendedQty. (3) Output ONLY a compact JSON object matching: "
+            "{\"items\":[{\"id\":string,\"name\":string,\"category\":string,\"currentStock\":number,\"unit\":string,\"recommendedQty\":number,\"urgency\":\"low|medium|high|critical\",\"reason\":string,\"estimatedCost\":number}]} . "
+            "Do not include any explanations, markdown, or extra fields. Never invent stock figures; rely on tool output."
         )
         tools = [
             self._tools.list_restock_risks,
             self._tools.create_po_from_recs,
+            self._tools.monthly_shopping_list,
             self._tools.notify,
         ]
         return self._agent("inventory_controller", prompt, tools)
