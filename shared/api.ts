@@ -205,3 +205,24 @@ export interface KSMInventoryItem {
 export interface GetKSMInventoryResponse {
   items: KSMInventoryItem[];
 }
+
+// =========
+// Inventory Management Types
+// =========
+
+export interface MenuItemAvailability {
+  itemid: number;
+  itemname: string;
+  sku: string;
+  available: boolean;
+  missingIngredients: string[];
+  stockStatus: 'available' | 'low_stock' | 'out_of_stock';
+}
+
+export interface GetMenuAvailabilityResponse {
+  items: MenuItemAvailability[];
+}
+
+export interface UpdateOrderStatusRequest {
+  status: 'open' | 'in_progress' | 'ready' | 'served' | 'completed' | 'cancelled';
+}

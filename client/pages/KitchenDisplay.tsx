@@ -997,15 +997,15 @@ export default function KitchenDisplay() {
                           <div className="flex-1 text-center py-4">
                             <div className="text-neutral-400 mb-2">
                               <ChefHat className="h-6 w-6 mx-auto" />
-                            </div>
+            </div>
                             <h3 className="text-xs font-semibold text-neutral-900 mb-1">No Orders Found</h3>
                             <p className="text-xs text-neutral-600">
-                              {activeFilter === 'all' 
-                                ? "No orders in the system yet."
-                                : `No orders with status "${activeFilter}" found.`
-                              }
-                            </p>
-                          </div>
+              {activeFilter === 'all' 
+                ? "No orders in the system yet."
+                : `No orders with status "${activeFilter}" found.`
+              }
+            </p>
+          </div>
                         )}
                       </div>
                       {/* Scroll indicator */}

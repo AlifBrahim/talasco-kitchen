@@ -13,7 +13,7 @@ export async function PUT(
     const body: UpdateInventoryRequest = await request.json();
     const { id } = params;
 
-    if (!body.quantity || body.quantity < 0) {
+    if (body.quantity == null || body.quantity < 0) {
       return NextResponse.json(
         { error: 'Invalid quantity value' },
         { status: 400 }
