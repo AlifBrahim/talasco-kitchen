@@ -94,6 +94,13 @@ export async function createOrderInDb(
     const createdItems: CreateOrderResponse['order_items'] = [];
 
     for (const item of payload.items) {
+      // Look up default prep time for this menu item to seed predicted_prep_minutes
+      const prepRes = await client.query<{ avg_prep_minutes: number | string | null }>(
+        `SELECT avg_prep_minutes FROM menu_items WHERE id = $1::uuid`,
+        [item.menu_item_id],
+      );
+      const predicted = prepRes.rows[0]?.avg_prep_minutes ?? null;
+
       const orderItemResult = await client.query<{
         id: string;
         order_id: string;
@@ -107,8 +114,8 @@ export async function createOrderInDb(
         started_at: Date | null;
         completed_at: Date | null;
       }>(
-        `INSERT INTO order_items (order_id, menu_item_id, qty, notes)
-           VALUES ($1::uuid, $2::uuid, $3, $4)
+        `INSERT INTO order_items (order_id, menu_item_id, qty, notes, predicted_prep_minutes)
+           VALUES ($1::uuid, $2::uuid, $3, $4, $5)
            RETURNING
              id::text,
              order_id::text,
@@ -121,7 +128,7 @@ export async function createOrderInDb(
              created_at,
              started_at,
              completed_at`,
-        [order.id, item.menu_item_id, item.qty, item.notes ?? null],
+        [order.id, item.menu_item_id, item.qty, item.notes ?? null, predicted],
       );
 
       const orderItem = orderItemResult.rows[0];

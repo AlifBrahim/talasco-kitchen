@@ -1,16 +1,45 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { Clock, Plus, Check, Utensils, ChefHat, Loader2, Eye, Brain, ArrowRight } from 'lucide-react';
+import { Clock, Check, Utensils, ChefHat, Loader2, Eye, ArrowRight, Brain } from 'lucide-react';
 import Link from 'next/link';
 import { GetOrdersResponse, UpdateOrderItemStatusRequest, UpdateOrderItemStatusResponse } from '@shared/api';
 import OrderDetailsModal from '@/components/OrderDetailsModal';
+
+// Kitchen Queue Agent integration per docs/KitchenQueueAgent.md
+
+type AgentRecommendation = {
+  action: string;
+  reason: string;
+  risks?: string | null;
+  payload?: {
+    orderid?: number;
+    itemid?: number;
+    score?: number;
+  } | null;
+};
+
+type QueueItem = {
+  orderid: number;
+  tablenumber?: number | null;
+  itemid: number;
+  itemname: string;
+  category: string;
+  orderdate: string;
+  promisedat?: string | null;
+  status: 'queued' | 'firing' | 'prepping' | 'passed' | 'served' | 'cancelled' | string;
+  quantity?: number;
+  est_prep_minutes?: number | null;
+  remaining_items?: number | null;
+  wait_minutes?: number | null;
+  sla_overdue?: boolean | null;
+};
 
 interface OrderItem {
   id: string;
   name: string;
   note?: string;
   qty: number;
-  status: 'queued' | 'firing' | 'prepping' | 'passed' | 'served' | 'cancelled';
+  status: 'queued' | 'firing' | 'prepping' | 'passed' | 'served' | 'cancelled' | 'completed';
   predicted_prep_minutes?: number;
   started_at?: string;
   completed_at?: string;
@@ -24,51 +53,81 @@ interface Order {
   items: OrderItem[];
   specialRequests?: string;
   timestamp: string;
+  placedAt?: string; // raw ISO for wait calculations
   startedAt?: string;
   completedAt?: string;
   totalTime?: string;
   source: string;
 }
 
-// Default orders (fallback)
-const defaultOrders: Order[] = [
-  {
-    id: '001',
-    tableNumber: '12',
-    customerName: 'Johnson',
-    status: 'in_progress',
-    timestamp: '2:04',
-    source: 'dine_in',
-    items: [
-      { id: '1', name: 'Grilled Salmon', note: 'Medium rare', qty: 1, status: 'prepping' },
-      { id: '2', name: 'Caesar Salad', qty: 1, status: 'queued' },
-      { id: '3', name: 'Garlic Bread', note: 'Extra garlic', qty: 1, status: 'queued' }
-    ],
-    specialRequests: 'No onions, extra lemon on the side'
-  }
-];
+type SmartQueueFoodItem = {
+  order: Order;
+  orderId: string;
+  itemId: string;
+  itemName: string;
+  quantity: number;
+  note?: string;
+  status: OrderItem['status'];
+  score?: number | null;
+  recommendation?: AgentRecommendation;
+  queueInfo?: QueueItem;
+  predictedPrepMinutes?: number | null;
+  startedAt?: string;
+};
+
+// Removed hardcoded fallback orders; start with empty and rely on API
 
 export default function KitchenDisplay() {
-  const [orders, setOrders] = useState<Order[]>(defaultOrders);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [historyOrders, setHistoryOrders] = useState<Order[]>([]);
   const [activeFilter, setActiveFilter] = useState<'all' | 'in_progress' | 'ready' | 'served' | 'cancelled' | 'history'>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
+  // Agent dispatcher + contextual queue
+  const [recs, setRecs] = useState<AgentRecommendation[]>([]);
+  const [recsError, setRecsError] = useState<string | null>(null);
+  const [queueCtx, setQueueCtx] = useState<QueueItem[]>([]);
+  const CATEGORY = 'Food';
+  const DISPATCHER_LIMIT = 8;
+  const QUEUE_LIMIT = 10;
+  const AGENTS_API_BASE = (process.env.NEXT_PUBLIC_KITCHEN_AGENTS_API ?? 'http://localhost:8000').replace(/\/$/, '');
 
   // Fetch active orders from API
+  type SimpleGetOrdersResponse = {
+    orders: Array<{
+      id: string;
+      table_number?: string | null;
+      customer_name?: string | null;
+      status: 'open' | 'in_progress' | 'ready' | 'served' | 'cancelled' | 'completed';
+      placed_at: string;
+      started_at?: string | null;
+      completed_at?: string | null;
+      source: string;
+      order_items: Array<{
+        id: string;
+        qty: number;
+        notes?: string | null;
+        status: OrderItem['status'];
+        predicted_prep_minutes?: number | null;
+        started_at?: string | null;
+        completed_at?: string | null;
+        menu_item: { id: string; name: string };
+      }>;
+    }>;
+  };
     const fetchOrders = async () => {
       try {
         setLoading(true);
         setError(null);
         
-      const response = await fetch('/api/orders/simple?status=in_progress,ready,served');
+        const response = await fetch('/api/orders/simple?status=open,in_progress,ready,served');
         if (!response.ok) {
           throw new Error('Failed to fetch orders');
         }
         
-        const data: GetOrdersResponse = await response.json();
+        const data: SimpleGetOrdersResponse = await response.json();
         
         // Transform database orders to UI format
         const transformedOrders: Order[] = data.orders.map((dbOrder) => ({
@@ -77,8 +136,9 @@ export default function KitchenDisplay() {
           customerName: dbOrder.customer_name,
           status: dbOrder.status,
           timestamp: formatTimeAgo(dbOrder.placed_at),
-        startedAt: dbOrder.started_at,
-        completedAt: dbOrder.completed_at,
+          placedAt: dbOrder.placed_at,
+          startedAt: dbOrder.started_at,
+          completedAt: dbOrder.completed_at,
           source: dbOrder.source,
           items: dbOrder.order_items.map((item) => ({
             id: item.id,
@@ -99,8 +159,7 @@ export default function KitchenDisplay() {
         setOrders(transformedOrders);
       } catch (err) {
         console.error('Error fetching orders:', err);
-        setError('Failed to load orders. Using sample data.');
-        // Keep default orders as fallback
+        setError('Failed to load orders.');
       } finally {
         setLoading(false);
       }
@@ -163,6 +222,53 @@ export default function KitchenDisplay() {
     return () => clearInterval(interval);
   }, []);
 
+  // Kitchen Agents: Station Dispatcher (prioritization) + contextual queue
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        setRecsError(null);
+        const dispatcherUrl = `${AGENTS_API_BASE}/agents/station-dispatcher?category=${encodeURIComponent(CATEGORY)}&limit=${encodeURIComponent(String(DISPATCHER_LIMIT))}`;
+        const queueUrl = `${AGENTS_API_BASE}/queue?category=${encodeURIComponent(CATEGORY)}&limit=${encodeURIComponent(String(QUEUE_LIMIT))}`;
+        const [dispatcherRes, queueRes] = await Promise.all([
+          fetch(dispatcherUrl, { cache: 'no-store' }),
+          fetch(queueUrl, { cache: 'no-store' }),
+        ]);
+
+        if (!mounted) return;
+
+        let fetchedRecs: AgentRecommendation[] = [];
+        if (dispatcherRes.ok) {
+          const rawRecs = await dispatcherRes.json();
+          fetchedRecs = Array.isArray(rawRecs) ? rawRecs : [];
+        } else {
+          throw new Error(`Dispatcher responded with ${dispatcherRes.status}`);
+        }
+
+        let fetchedQueue: QueueItem[] = [];
+        if (queueRes.ok) {
+          const rawQueue = await queueRes.json();
+          fetchedQueue = Array.isArray(rawQueue) ? rawQueue : [];
+        }
+
+        setRecs(fetchedRecs);
+        setQueueCtx(fetchedQueue);
+      } catch (e) {
+        if (!mounted) return;
+        console.error('Station dispatcher load failed:', e);
+        setRecs([]);
+        setQueueCtx([]);
+        setRecsError('Failed to load station dispatcher');
+      }
+    };
+    load();
+    const id = setInterval(load, 10000); // ~10s
+    return () => {
+      mounted = false;
+      clearInterval(id);
+    };
+  }, [AGENTS_API_BASE, CATEGORY]);
+
   // Format time ago
   const formatTimeAgo = (dateString: string): string => {
     const now = new Date();
@@ -214,23 +320,36 @@ export default function KitchenDisplay() {
       }
 
       const data: UpdateOrderItemStatusResponse = await response.json();
-      
+      const updatedFromServer = data.orderItem ?? data.order_item ?? null;
+
       // Update local state
-      setOrders(prev => prev.map(order => 
-        order.id === orderId 
-          ? {
-              ...order,
-              items: order.items.map(item =>
-                item.id === itemId 
-                  ? { ...item, status: newStatus }
-                  : item
-              )
-            }
-          : order
-      ));
+      setOrders(prev => prev.map(order => {
+        if (order.id !== orderId) return order;
+        const updatedItems = order.items.map(item => {
+          const matchesItem = item.id === itemId || (item.id.includes('-') && item.id.split('-')[1] === itemId);
+          if (!matchesItem) return item;
+          return {
+            ...item,
+            status: (updatedFromServer?.status as OrderItem['status']) ?? newStatus,
+            started_at: updatedFromServer?.started_at ?? item.started_at,
+            completed_at: updatedFromServer?.completed_at ?? item.completed_at,
+          };
+        });
+        const allCompleted = updatedItems.length > 0 && updatedItems.every(item => item.status === 'completed');
+        return {
+          ...order,
+          items: updatedItems,
+          status: ((updatedFromServer?.status as OrderItem['status']) ?? newStatus) === 'completed' && allCompleted
+            ? 'completed'
+            : order.status,
+        };
+      }));
+
+      return true;
     } catch (err) {
       console.error('Error updating order item status:', err);
       setError('Failed to update order item status');
+      return false;
     }
   };
 
@@ -309,6 +428,7 @@ export default function KitchenDisplay() {
       case 'prepping': return 'bg-yellow-100 text-yellow-800';
       case 'passed': return 'bg-blue-100 text-blue-800';
       case 'served': return 'bg-green-100 text-green-800';
+      case 'completed': return 'bg-purple-100 text-purple-800';
       case 'cancelled': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -330,42 +450,112 @@ export default function KitchenDisplay() {
     return orders.filter(order => order.status === 'in_progress' || order.status === 'ready').length;
   };
 
-  // Helper function to get all food items from orders for AI queue
-  const getAllFoodItems = () => {
-    const allItems: Array<{
-      orderId: string;
-      itemId: string;
-      name: string;
-      qty: number;
-      note?: string;
-      status: OrderItem['status'];
-      predicted_prep_minutes?: number;
-      order: Order;
-    }> = [];
+  const formatScore = (score?: number | null) => {
+    if (typeof score !== 'number' || Number.isNaN(score)) return null;
+    return score >= 1 ? score.toFixed(1) : score.toFixed(3);
+  };
 
-    getFilteredOrders().forEach(order => {
-      order.items.forEach(item => {
-        if (item.status === 'queued' || item.status === 'prepping') {
-          allItems.push({
-            orderId: order.id,
-            itemId: item.id,
-            name: item.name,
-            qty: item.qty,
-            note: item.note,
-            status: item.status,
-            predicted_prep_minutes: item.predicted_prep_minutes,
-            order: order
-          });
-        }
+  // Map agent payload IDs to local dataset (string compare)
+  const findOrderByPayload = (payload?: AgentRecommendation['payload']) => {
+    if (!payload?.orderid) return undefined;
+    return orders.find(o => o.id === String(payload.orderid));
+  };
+
+  const findItemByPayload = (order: Order | undefined, payload?: AgentRecommendation['payload']) => {
+    if (!order || !payload?.itemid) return undefined;
+    const targetId = String(payload.itemid);
+    return order.items.find(i => {
+      if (i.id === targetId) return true;
+      if (i.id.includes('-')) {
+        const [, suffix] = i.id.split('-');
+        if (suffix === targetId) return true;
+      }
+      return false;
+    });
+  };
+
+  const getAllFoodItems = (): SmartQueueFoodItem[] => {
+    const seen = new Set<string>();
+    const items: SmartQueueFoodItem[] = [];
+
+    recs.forEach(rec => {
+      if (!rec.payload) return;
+      const order = findOrderByPayload(rec.payload);
+      const item = findItemByPayload(order, rec.payload);
+      if (!order || !item) return;
+
+      const key = `${order.id}|${item.id}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+
+      const rawScore = rec.payload?.score;
+      const parsedScore = typeof rawScore === 'number'
+        ? rawScore
+        : typeof rawScore === 'string'
+          ? Number(rawScore)
+          : undefined;
+
+      items.push({
+        order,
+        orderId: order.id,
+        itemId: item.id,
+        itemName: item.name,
+        quantity: item.qty,
+        note: item.note,
+        status: item.status,
+        score: parsedScore !== undefined && !Number.isNaN(parsedScore) ? parsedScore : null,
+        recommendation: rec,
+        predictedPrepMinutes: item.predicted_prep_minutes ?? null,
+        startedAt: item.started_at ?? undefined,
       });
     });
 
-    // Sort by predicted prep time (shortest first) for AI efficiency
-    return allItems.sort((a, b) => {
-      const aTime = a.predicted_prep_minutes || 999;
-      const bTime = b.predicted_prep_minutes || 999;
-      return aTime - bTime;
+    queueCtx.forEach(queueItem => {
+      const orderId = String(queueItem.orderid);
+      const order = orders.find(o => o.id === orderId);
+      const normalizedItemId = String(queueItem.itemid);
+      const item = order?.items.find(orderItem => {
+        if (orderItem.id === normalizedItemId) return true;
+        if (orderItem.id.includes('-')) {
+          const [, suffix] = orderItem.id.split('-');
+          return suffix === normalizedItemId;
+        }
+        return false;
+      });
+
+      if (!order || !item) return;
+
+      const key = `${order.id}|${item.id}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+
+      items.push({
+        order,
+        orderId: order.id,
+        itemId: item.id,
+        itemName: queueItem.itemname || item.name,
+        quantity: queueItem.quantity ?? item.qty,
+        note: item.note,
+        status: (queueItem.status as OrderItem['status']) ?? item.status,
+        queueInfo: queueItem,
+        predictedPrepMinutes: item.predicted_prep_minutes ?? queueItem.est_prep_minutes ?? null,
+        startedAt: item.started_at ?? undefined,
+      });
     });
+
+    return items;
+  };
+
+  const handleCompleteFromAgent = async (payload?: AgentRecommendation['payload']) => {
+    if (!payload?.orderid || !payload?.itemid) return;
+    const order = findOrderByPayload(payload);
+    const item = findItemByPayload(order, payload);
+    const orderId = order?.id ?? String(payload.orderid);
+    const itemId = item?.id ?? String(payload.itemid);
+    const success = await updateOrderItemStatus(orderId, itemId, 'completed');
+    if (!success) return;
+    setRecs(prev => prev.filter(r => r.payload?.orderid !== payload.orderid || r.payload?.itemid !== payload.itemid));
+    setQueueCtx(prev => prev.filter(q => q.orderid !== payload.orderid || q.itemid !== payload.itemid));
   };
 
   const renderOrderCard = (order: Order) => (
@@ -517,78 +707,121 @@ export default function KitchenDisplay() {
     </>
   );
 
-  // Render compact food item card for AI Smart Queue
-  const renderCompactFoodItemCard = (foodItem: any, priority: number) => (
-    <>
-      {/* Priority Badge */}
-      <div className="bg-gradient-to-r from-purple-500 to-blue-500 px-2 py-1.5 text-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-1.5">
-            <span className="bg-white text-purple-600 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold">
-              {priority}
-            </span>
-            <span className="text-xs font-semibold">#{foodItem.orderId}</span>
-          </div>
-          <span className="text-xs bg-white bg-opacity-20 px-1.5 py-0.5 rounded-full">
-            T{foodItem.order.tableNumber}
-          </span>
-        </div>
-      </div>
+  const renderCompactFoodItemCard = (foodItem: SmartQueueFoodItem, position: number) => {
+    const waitMinutes = typeof foodItem.queueInfo?.wait_minutes === 'number'
+      ? Math.max(0, Math.round(foodItem.queueInfo.wait_minutes))
+      : null;
+    const remainingItems = typeof foodItem.queueInfo?.remaining_items === 'number'
+      ? Math.max(0, foodItem.queueInfo.remaining_items)
+      : null;
+    const estPrepMinutes = typeof foodItem.predictedPrepMinutes === 'number'
+      ? Math.max(0, Math.round(foodItem.predictedPrepMinutes))
+      : null;
+    const placementText = foodItem.order.placedAt
+      ? formatTimeAgo(foodItem.order.placedAt)
+      : foodItem.order.timestamp;
+    const payload = foodItem.recommendation?.payload;
+    const showCompleteButton = Boolean(payload?.orderid && payload?.itemid);
+    const formattedScore = formatScore(foodItem.score);
 
-      {/* Food Item Details */}
-      <div className="p-2">
-        <div className="text-center mb-2">
-          <h3 className="text-sm font-bold text-neutral-900 mb-1">{foodItem.name}</h3>
-          <div className="flex items-center justify-center space-x-1.5">
-            <span className="text-lg font-bold text-purple-600">x{foodItem.qty}</span>
-            {foodItem.predicted_prep_minutes && (
-              <span className="text-xs bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded-full">
-                {foodItem.predicted_prep_minutes}m
+    return (
+      <>
+        <div className="bg-white px-3 py-2 border-b border-purple-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span className="w-6 h-6 rounded-full bg-purple-600 text-white text-xs font-bold flex items-center justify-center">
+                {position}
+              </span>
+              <div>
+                <div className="text-sm font-semibold text-neutral-900 truncate">
+                  {foodItem.itemName}
+                </div>
+                <div className="text-xs text-neutral-600">
+                  Order #{foodItem.orderId}
+                  {foodItem.order.tableNumber && (
+                    <span className="ml-1">· T{foodItem.order.tableNumber}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+            {formattedScore && (
+              <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-xs font-semibold">
+                Score {formattedScore}
               </span>
             )}
           </div>
         </div>
-
-        {foodItem.note && (
-          <div className="bg-amber-50 border border-amber-200 rounded p-1.5 mb-2">
-            <div className="text-xs text-amber-800 font-medium mb-0.5">Note:</div>
-            <div className="text-xs text-amber-700 truncate">{foodItem.note}</div>
-          </div>
-        )}
-
-        {/* Status and Actions */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${getItemStatusColor(foodItem.status)}`}>
-              {foodItem.status === 'queued' ? 'Q' : 'P'}
-            </span>
-            <span className="text-xs text-neutral-500">
-              {formatTimeAgo(foodItem.order.timestamp)}
+        <div className="p-3 space-y-2 bg-white">
+          <div className="flex items-center justify-between text-xs text-neutral-600">
+            <div className="flex items-center space-x-1">
+              <Utensils className="h-3 w-3" />
+              <span>
+                {foodItem.quantity} item{foodItem.quantity !== 1 ? 's' : ''}
+              </span>
+            </div>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getItemStatusColor(foodItem.status)}`}>
+              {foodItem.status}
             </span>
           </div>
-          
-          <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
-            {foodItem.status === 'queued' && (
-              <button
-                onClick={() => updateOrderItemStatus(foodItem.orderId, foodItem.itemId, 'prepping')}
-                className="w-full bg-purple-600 text-white py-1.5 px-2 rounded text-xs font-medium hover:bg-purple-700 transition-colors"
-              >
-                Start
-              </button>
+
+          {foodItem.note && (
+            <div className="bg-purple-50 border border-purple-200 text-xs text-purple-800 rounded px-2 py-1">
+              {foodItem.note}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2 text-xs text-neutral-600">
+            {waitMinutes !== null && (
+              <div className="flex items-center space-x-1">
+                <Clock className="h-3 w-3" />
+                <span>Waiting {waitMinutes}m</span>
+              </div>
             )}
-            {foodItem.status === 'prepping' && (
+            {estPrepMinutes !== null && (
+              <div className="text-right">
+                Est. prep {estPrepMinutes}m
+              </div>
+            )}
+            {remainingItems !== null && (
+              <div className="col-span-2 text-neutral-600">
+                {remainingItems} item{remainingItems !== 1 ? 's' : ''} remain in order queue
+              </div>
+            )}
+            {foodItem.queueInfo?.sla_overdue && (
+              <div className="col-span-2 text-xs font-semibold text-red-600">
+                SLA overdue - expedite!
+              </div>
+            )}
+          </div>
+
+          {foodItem.recommendation?.reason && (
+            <div className="text-xs text-neutral-600 italic overflow-hidden text-ellipsis">
+              {foodItem.recommendation.reason}
+            </div>
+          )}
+
+          <div
+            className="flex items-center justify-between pt-2 border-t border-purple-100"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="text-xs text-neutral-500">
+              Placed {placementText}
+            </div>
+            {showCompleteButton && (
               <button
-                onClick={() => updateOrderItemStatus(foodItem.orderId, foodItem.itemId, 'passed')}
-                className="w-full bg-blue-600 text-white py-1.5 px-2 rounded text-xs font-medium hover:bg-blue-700 transition-colors"
+                type="button"
+                onClick={() => handleCompleteFromAgent(payload)}
+                className="bg-purple-600 text-white text-xs font-medium px-2 py-1 rounded hover:bg-purple-700 transition-colors"
               >
-                Done
+                Complete Item
               </button>
             )}
           </div>
         </div>
-      </div>
-    </>
-  );
+      </>
+    );
+  };
+
 
   // Render history order card with completion details
   const renderHistoryOrderCard = (order: Order) => (
@@ -706,9 +939,11 @@ export default function KitchenDisplay() {
                 {item.qty > 1 && <span className="text-neutral-500">x{item.qty}</span>}
               </div>
               <span className={`px-1 py-0.5 rounded-full text-xs font-medium ${getItemStatusColor(item.status)}`}>
-                {item.status === 'queued' ? 'Q' : 
+                {item.status === 'queued' ? 'Q' :
                  item.status === 'prepping' ? 'P' :
-                 item.status === 'passed' ? 'D' : 'S'}
+                 item.status === 'passed' ? 'D' :
+                 item.status === 'served' ? 'S' :
+                 item.status === 'completed' ? 'C' : '•'}
               </span>
             </div>
           ))}

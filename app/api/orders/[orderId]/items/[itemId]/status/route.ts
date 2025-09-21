@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { dbQuery } from '@server/db';
 
 interface UpdateStatusRequest {
-  status: 'queued' | 'prepping' | 'ready' | 'served' | 'cancelled';
+  status: 'queued' | 'prepping' | 'ready' | 'served' | 'completed' | 'cancelled';
 }
 
 export async function PATCH(
@@ -70,7 +70,7 @@ export async function PATCH(
       if (!checkResult.rows[0]?.started_at) {
         updateQuery += `, started_at = CURRENT_TIMESTAMP`;
       }
-    } else if (['ready', 'served'].includes(body.status)) {
+    } else if (['ready', 'served', 'completed'].includes(body.status)) {
       updateQuery += `, completed_at = CURRENT_TIMESTAMP`;
     }
 
