@@ -50,20 +50,20 @@ const defaultOrders: Order[] = [
 
 export default function KitchenDisplay() {
   const [orders, setOrders] = useState<Order[]>(defaultOrders);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'in_progress' | 'ready' | 'served' | 'cancelled'>('all');
+  const [historyOrders, setHistoryOrders] = useState<Order[]>([]);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'in_progress' | 'ready' | 'served' | 'cancelled' | 'history'>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showOrderModal, setShowOrderModal] = useState(false);
 
-  // Fetch orders from API
-  useEffect(() => {
+  // Fetch active orders from API
     const fetchOrders = async () => {
       try {
         setLoading(true);
         setError(null);
         
-        const response = await fetch('/api/orders/simple?status=in_progress,ready,served');
+      const response = await fetch('/api/orders/simple?status=in_progress,ready,served');
         if (!response.ok) {
           throw new Error('Failed to fetch orders');
         }
@@ -77,8 +77,8 @@ export default function KitchenDisplay() {
           customerName: dbOrder.customer_name,
           status: dbOrder.status,
           timestamp: formatTimeAgo(dbOrder.placed_at),
-          startedAt: dbOrder.started_at,
-          completedAt: dbOrder.completed_at,
+        startedAt: dbOrder.started_at,
+        completedAt: dbOrder.completed_at,
           source: dbOrder.source,
           items: dbOrder.order_items.map((item) => ({
             id: item.id,
@@ -106,10 +106,60 @@ export default function KitchenDisplay() {
       }
     };
 
+  // Fetch completed orders for history
+  const fetchHistoryOrders = async () => {
+    try {
+      const response = await fetch('/api/orders/simple?status=completed');
+      if (!response.ok) {
+        throw new Error('Failed to fetch history orders');
+      }
+      
+      const data: GetOrdersResponse = await response.json();
+      
+      // Transform database orders to UI format
+      const transformedHistoryOrders: Order[] = data.orders.map((dbOrder) => ({
+        id: dbOrder.id,
+        tableNumber: dbOrder.table_number,
+        customerName: dbOrder.customer_name,
+        status: dbOrder.status,
+        timestamp: formatTimeAgo(dbOrder.placed_at),
+        startedAt: dbOrder.started_at,
+        completedAt: dbOrder.completed_at,
+        totalTime: dbOrder.completed_at && dbOrder.started_at 
+          ? getElapsedTime(dbOrder.started_at, dbOrder.completed_at)
+          : undefined,
+        source: dbOrder.source,
+        items: dbOrder.order_items.map((item) => ({
+          id: item.id,
+          name: item.menu_item.name,
+          note: item.notes,
+          qty: item.qty,
+          status: item.status,
+          predicted_prep_minutes: item.predicted_prep_minutes,
+          started_at: item.started_at,
+          completed_at: item.completed_at
+        })),
+        specialRequests: dbOrder.order_items
+          .filter(item => item.notes)
+          .map(item => item.notes)
+          .join(', ')
+      }));
+      
+      setHistoryOrders(transformedHistoryOrders);
+    } catch (err) {
+      console.error('Error fetching history orders:', err);
+    }
+  };
+
+  useEffect(() => {
     fetchOrders();
+    fetchHistoryOrders();
     
     // Refresh orders every 30 seconds
-    const interval = setInterval(fetchOrders, 30000);
+    const interval = setInterval(() => {
+      fetchOrders();
+      fetchHistoryOrders();
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -209,44 +259,11 @@ export default function KitchenDisplay() {
       order.id === orderId ? { ...order, status: newStatus } : order
     ));
 
-      // If marked as completed, refresh the orders list to remove completed orders
+      // If marked as completed, refresh both active orders and history
       if (newStatus === 'completed') {
         setTimeout(() => {
-          // Refresh orders by calling the fetch function
-          const refreshOrders = async () => {
-            try {
-              const response = await fetch('/api/orders/simple?status=in_progress,ready,served');
-              if (response.ok) {
-                const data = await response.json();
-                const transformedOrders = data.orders.map((dbOrder: any) => ({
-                  id: dbOrder.id,
-                  tableNumber: dbOrder.table_number,
-                  customerName: dbOrder.customer_name,
-                  status: dbOrder.status,
-                  timestamp: formatTimeAgo(dbOrder.placed_at),
-                  source: dbOrder.source,
-                  items: dbOrder.order_items.map((item: any) => ({
-                    id: item.id,
-                    name: item.menu_item.name,
-                    note: item.notes,
-                    qty: item.qty,
-                    status: item.status,
-                    predicted_prep_minutes: item.predicted_prep_minutes,
-                    started_at: item.started_at,
-                    completed_at: item.completed_at
-                  })),
-                  specialRequests: dbOrder.order_items
-                    .filter((item: any) => item.notes)
-                    .map((item: any) => item.notes)
-                    .join(', ')
-                }));
-                setOrders(transformedOrders);
-              }
-            } catch (error) {
-              console.error('Error refreshing orders:', error);
-            }
-          };
-          refreshOrders();
+          fetchOrders();
+          fetchHistoryOrders();
         }, 1000);
       }
 
@@ -298,11 +315,13 @@ export default function KitchenDisplay() {
   };
 
   const getFilteredOrders = () => {
+    if (activeFilter === 'history') return historyOrders;
     if (activeFilter === 'all') return orders;
     return orders.filter(order => order.status === activeFilter);
   };
 
-  const getStatusCount = (status: Order['status'] | 'all') => {
+  const getStatusCount = (status: Order['status'] | 'all' | 'history') => {
+    if (status === 'history') return historyOrders.length;
     if (status === 'all') return orders.length;
     return orders.filter(order => order.status === status).length;
   };
@@ -571,6 +590,78 @@ export default function KitchenDisplay() {
     </>
   );
 
+  // Render history order card with completion details
+  const renderHistoryOrderCard = (order: Order) => (
+    <>
+      {/* Order Header */}
+      <div className="bg-purple-50 px-2 py-1.5 border-b border-purple-200">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs font-bold text-neutral-900">#{order.id}</span>
+          <span className="px-1.5 py-0.5 rounded-full text-xs font-medium bg-purple-500 text-white">
+            Completed
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-xs text-neutral-600">
+          <span>T{order.tableNumber}</span>
+          <div className="flex flex-col items-end">
+            <span className="flex items-center">
+              <Clock className="h-3 w-3 mr-0.5" />
+              {order.timestamp}
+            </span>
+            {order.totalTime && (
+              <span className="text-xs font-medium text-purple-600">
+                Total: {order.totalTime}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Order Items */}
+      <div className="p-2">
+        <div className="space-y-1 mb-2">
+          {order.items.slice(0, 3).map((item, index) => (
+            <div key={item.id} className="flex items-center justify-between text-xs">
+              <div className="flex items-center space-x-1">
+                <span className="w-3 h-3 bg-purple-600 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                  {index + 1}
+                </span>
+                <span className="font-medium truncate">{item.name}</span>
+                {item.qty > 1 && <span className="text-neutral-500">x{item.qty}</span>}
+              </div>
+              <span className="px-1 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                ✓
+              </span>
+            </div>
+          ))}
+          {order.items.length > 3 && (
+            <div className="text-xs text-neutral-500 text-center">
+              +{order.items.length - 3} more
+            </div>
+          )}
+        </div>
+
+        {order.specialRequests && (
+          <div className="bg-purple-50 border border-purple-200 rounded p-1 mb-2">
+            <div className="text-xs text-purple-800 font-medium mb-0.5">Special Requests:</div>
+            <div className="text-xs text-purple-700 truncate">{order.specialRequests}</div>
+          </div>
+        )}
+
+        {/* View Details Button */}
+        <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => openOrderModal(order)}
+            className="w-full bg-purple-100 text-purple-700 py-1 px-2 rounded text-xs font-medium hover:bg-purple-200 transition-colors flex items-center justify-center space-x-1"
+          >
+            <Eye className="h-3 w-3" />
+            <span>View Details</span>
+          </button>
+        </div>
+      </div>
+    </>
+  );
+
   // Render mini order card for Traditional Queue
   const renderMiniOrderCard = (order: Order) => (
     <>
@@ -721,7 +812,8 @@ export default function KitchenDisplay() {
                   { key: 'in_progress', label: 'In Progress' },
                   { key: 'ready', label: 'Ready' },
                   { key: 'served', label: 'Served' },
-                  { key: 'cancelled', label: 'Cancelled' }
+                  { key: 'cancelled', label: 'Cancelled' },
+                  { key: 'history', label: 'History' }
                 ].map(({ key, label }) => (
                   <button
                     key={key}
@@ -772,112 +864,162 @@ export default function KitchenDisplay() {
           </div>
         )}
 
-        {/* Two Queue Sections - Top and Bottom */}
+        {/* Content Based on Active Filter */}
         {!loading && (
-          <div className="flex flex-col gap-3 p-3 h-full">
-            {/* AI Smart Queue Section - Top Half */}
-            <div className="flex-1 bg-white rounded-lg border border-neutral-200 overflow-hidden">
-              <div className="bg-gradient-to-r from-purple-50 to-blue-50 px-4 py-2 border-b border-neutral-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Brain className="h-4 w-4 text-purple-600" />
-                    <div>
-                      <h3 className="text-sm font-semibold text-neutral-900">AI Smart Queue</h3>
-                      <p className="text-xs text-neutral-600">Cook these items first for efficiency</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs font-medium text-neutral-700">Items:</span>
-                    <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-bold">
-                      {getAllFoodItems().length}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="p-2 h-full">
-                <div className="relative h-full">
-                  <div className="flex space-x-2 overflow-x-auto pb-1 custom-scrollbar horizontal-scroll h-full">
-                    {getAllFoodItems().length > 0 ? (
-                      getAllFoodItems().map((foodItem, index) => (
-                        <div key={`${foodItem.orderId}-${foodItem.itemId}`} className="flex-shrink-0 w-80 bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg border border-purple-200 overflow-hidden hover:shadow-md transition-all duration-200 cursor-pointer transform hover:-translate-y-0.5" onClick={() => openOrderModal(foodItem.order)}>
-                          {renderCompactFoodItemCard(foodItem, index + 1)}
+          <>
+            {/* History View */}
+            {activeFilter === 'history' ? (
+              <div className="p-3 h-full">
+                <div className="bg-white rounded-lg border border-neutral-200 overflow-hidden h-full">
+                  <div className="bg-gradient-to-r from-purple-50 to-indigo-50 px-4 py-2 border-b border-neutral-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Clock className="h-4 w-4 text-purple-600" />
+                        <div>
+                          <h3 className="text-sm font-semibold text-neutral-900">Order History</h3>
+                          <p className="text-xs text-neutral-600">Recently completed orders</p>
                         </div>
-                      ))
-                    ) : (
-                      <div className="flex-1 text-center py-4">
-                        <div className="text-neutral-400 mb-2">
-                          <Brain className="h-6 w-6 mx-auto" />
-                        </div>
-                        <h3 className="text-xs font-semibold text-neutral-900 mb-1">No Items to Cook</h3>
-                        <p className="text-xs text-neutral-600">AI queue is ready for new orders</p>
                       </div>
-                    )}
-                  </div>
-                  {/* Scroll indicator */}
-                  {getAllFoodItems().length > 4 && (
-                    <div className="absolute right-0 top-1/2 transform -translate-y-1/2 bg-white shadow-md rounded-full p-1 border border-neutral-200">
-                      <ArrowRight className="h-3 w-3 text-neutral-600" />
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs font-medium text-neutral-700">Completed:</span>
+                        <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-bold">
+                          {historyOrders.length}
+                        </span>
+                      </div>
                     </div>
-                  )}
+                  </div>
+                  
+                  <div className="p-2 h-full">
+                    <div className="relative h-full">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 overflow-y-auto pb-1 custom-scrollbar h-full">
+                        {historyOrders.length > 0 ? (
+                          historyOrders.map((order) => (
+                            <div key={order.id} className="bg-white rounded-lg border border-purple-200 overflow-hidden hover:shadow-md transition-all duration-200 cursor-pointer transform hover:-translate-y-0.5" onClick={() => openOrderModal(order)}>
+                              {renderHistoryOrderCard(order)}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="col-span-full text-center py-8">
+                            <div className="text-neutral-400 mb-2">
+                              <Clock className="h-8 w-8 mx-auto" />
+                            </div>
+                            <h3 className="text-sm font-semibold text-neutral-900 mb-1">No Completed Orders</h3>
+                            <p className="text-sm text-neutral-600">Completed orders will appear here</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              /* Active Orders View - Two Queue Sections */
+              <div className="flex flex-col gap-3 p-3 h-full">
+                {/* AI Smart Queue Section - Top Half */}
+                <div className="flex-1 bg-white rounded-lg border border-neutral-200 overflow-hidden">
+                  <div className="bg-gradient-to-r from-purple-50 to-blue-50 px-4 py-2 border-b border-neutral-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Brain className="h-4 w-4 text-purple-600" />
+                        <div>
+                          <h3 className="text-sm font-semibold text-neutral-900">AI Smart Queue</h3>
+                          <p className="text-xs text-neutral-600">Cook these items first for efficiency</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs font-medium text-neutral-700">Items:</span>
+                        <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-bold">
+                          {getAllFoodItems().length}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="p-2 h-full">
+                    <div className="relative h-full">
+                      <div className="flex space-x-2 overflow-x-auto pb-1 custom-scrollbar horizontal-scroll h-full">
+                        {getAllFoodItems().length > 0 ? (
+                          getAllFoodItems().map((foodItem, index) => (
+                            <div key={`${foodItem.orderId}-${foodItem.itemId}`} className="flex-shrink-0 w-80 bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg border border-purple-200 overflow-hidden hover:shadow-md transition-all duration-200 cursor-pointer transform hover:-translate-y-0.5" onClick={() => openOrderModal(foodItem.order)}>
+                              {renderCompactFoodItemCard(foodItem, index + 1)}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="flex-1 text-center py-4">
+                            <div className="text-neutral-400 mb-2">
+                              <Brain className="h-6 w-6 mx-auto" />
+                            </div>
+                            <h3 className="text-xs font-semibold text-neutral-900 mb-1">No Items to Cook</h3>
+                            <p className="text-xs text-neutral-600">AI queue is ready for new orders</p>
+                          </div>
+                        )}
+                      </div>
+                      {/* Scroll indicator */}
+                      {getAllFoodItems().length > 4 && (
+                        <div className="absolute right-0 top-1/2 transform -translate-y-1/2 bg-white shadow-md rounded-full p-1 border border-neutral-200">
+                          <ArrowRight className="h-3 w-3 text-neutral-600" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
-            {/* Traditional Queue Section - Bottom Half */}
-            <div className="flex-1 bg-white rounded-lg border border-neutral-200 overflow-hidden">
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-4 py-2 border-b border-neutral-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <ChefHat className="h-4 w-4 text-green-600" />
-                    <div>
-                      <h3 className="text-sm font-semibold text-neutral-900">Traditional Queue</h3>
-                      <p className="text-xs text-neutral-600">Complete orders by table</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs font-medium text-neutral-700">Orders:</span>
-                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-bold">
-                      {getFilteredOrders().length}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="p-2 h-full">
-                <div className="relative h-full">
-                  <div className="flex space-x-2 overflow-x-auto pb-1 custom-scrollbar horizontal-scroll h-full">
-                    {getFilteredOrders().length > 0 ? (
-                      getFilteredOrders().map((order) => (
-                        <div key={order.id} className="flex-shrink-0 w-80 bg-white rounded-lg border border-neutral-200 overflow-hidden hover:shadow-md transition-all duration-200 cursor-pointer transform hover:-translate-y-0.5" onClick={() => openOrderModal(order)}>
-                          {renderMiniOrderCard(order)}
+                {/* Traditional Queue Section - Bottom Half */}
+                <div className="flex-1 bg-white rounded-lg border border-neutral-200 overflow-hidden">
+                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-4 py-2 border-b border-neutral-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <ChefHat className="h-4 w-4 text-green-600" />
+                        <div>
+                          <h3 className="text-sm font-semibold text-neutral-900">Traditional Queue</h3>
+                          <p className="text-xs text-neutral-600">Complete orders by table</p>
                         </div>
-                      ))
-                    ) : (
-                      <div className="flex-1 text-center py-4">
-                        <div className="text-neutral-400 mb-2">
-                          <ChefHat className="h-6 w-6 mx-auto" />
-            </div>
-                        <h3 className="text-xs font-semibold text-neutral-900 mb-1">No Orders Found</h3>
-                        <p className="text-xs text-neutral-600">
-              {activeFilter === 'all' 
-                ? "No orders in the system yet."
-                : `No orders with status "${activeFilter}" found.`
-              }
-            </p>
                       </div>
-                    )}
-                  </div>
-                  {/* Scroll indicator */}
-                  {getFilteredOrders().length > 4 && (
-                    <div className="absolute right-0 top-1/2 transform -translate-y-1/2 bg-white shadow-md rounded-full p-1 border border-neutral-200">
-                      <ArrowRight className="h-3 w-3 text-neutral-600" />
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs font-medium text-neutral-700">Orders:</span>
+                        <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-bold">
+                          {getFilteredOrders().length}
+                        </span>
+                      </div>
                     </div>
-                  )}
+                  </div>
+                  
+                  <div className="p-2 h-full">
+                    <div className="relative h-full">
+                      <div className="flex space-x-2 overflow-x-auto pb-1 custom-scrollbar horizontal-scroll h-full">
+                        {getFilteredOrders().length > 0 ? (
+                          getFilteredOrders().map((order) => (
+                            <div key={order.id} className="flex-shrink-0 w-80 bg-white rounded-lg border border-neutral-200 overflow-hidden hover:shadow-md transition-all duration-200 cursor-pointer transform hover:-translate-y-0.5" onClick={() => openOrderModal(order)}>
+                              {renderMiniOrderCard(order)}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="flex-1 text-center py-4">
+                            <div className="text-neutral-400 mb-2">
+                              <ChefHat className="h-6 w-6 mx-auto" />
+                            </div>
+                            <h3 className="text-xs font-semibold text-neutral-900 mb-1">No Orders Found</h3>
+                            <p className="text-xs text-neutral-600">
+                              {activeFilter === 'all' 
+                                ? "No orders in the system yet."
+                                : `No orders with status "${activeFilter}" found.`
+                              }
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      {/* Scroll indicator */}
+                      {getFilteredOrders().length > 4 && (
+                        <div className="absolute right-0 top-1/2 transform -translate-y-1/2 bg-white shadow-md rounded-full p-1 border border-neutral-200">
+                          <ArrowRight className="h-3 w-3 text-neutral-600" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
+            )}
+          </>
         )}
       </main>
 
