@@ -60,6 +60,7 @@ export default function KitchenManager() {
   const [modifiedItems, setModifiedItems] = useState<Set<string>>(new Set());
   const [originalQuantities, setOriginalQuantities] = useState<Map<string, number>>(new Map());
   const [restockBadgeCount, setRestockBadgeCount] = useState<number>(0);
+  const [isRestocking, setIsRestocking] = useState(false);
 
   // Fetch KSM data only
   useEffect(() => {
@@ -357,6 +358,57 @@ export default function KitchenManager() {
       alert('Failed to save changes. Please try again.');
     } finally {
       setIsSavingAll(false);
+    }
+  };
+
+  const handleRestockAll = async () => {
+    if (aiPrepItems.length === 0) {
+      alert('No items to restock');
+      return;
+    }
+
+    const confirmed = confirm(
+      `Are you sure you want to restock all ${aiPrepItems.length} items? This will add the recommended quantities to your current inventory.`
+    );
+    
+    if (!confirmed) return;
+
+    setIsRestocking(true);
+    try {
+      const restockItems = aiPrepItems.map(item => ({
+        id: item.id,
+        recommendedQty: item.recommendedQty
+      }));
+
+      const response = await fetch('/api/inventory/restock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: restockItems })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to restock inventory');
+      }
+
+      const result = await response.json();
+      
+      // Refresh inventory data
+      const ksmResponse = await fetch('/api/ksm');
+      if (ksmResponse.ok) {
+        const ksmData = await ksmResponse.json();
+        setInventory((ksmData as GetKSMInventoryResponse).items || []);
+      }
+
+      // Close modal and show success
+      setShowAIPrepModal(false);
+      alert(`Successfully restocked ${result.items.length} items!`);
+      
+    } catch (error) {
+      console.error('Failed to restock inventory:', error);
+      alert(`Failed to restock inventory: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsRestocking(false);
     }
   };
 
@@ -803,6 +855,23 @@ export default function KitchenManager() {
                   >
                     <ShoppingCart className="h-4 w-4" />
                     <span>Copy for Foodpanda</span>
+                  </button>
+                  <button 
+                    onClick={handleRestockAll}
+                    disabled={isRestocking}
+                    className="px-6 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all duration-200 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isRestocking ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Restocking...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-4 w-4" />
+                        <span>Restock All</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
