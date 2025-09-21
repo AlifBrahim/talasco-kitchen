@@ -113,7 +113,7 @@ export default function MenuItemModal({ item, isOpen, onClose, onAddToCart }: Me
                     <span className="text-neutral-900">{modifier.name}</span>
                   </div>
                   {modifier.price > 0 && (
-                    <span className="text-neutral-600">+${modifier.price.toFixed(2)}</span>
+                    <span className="text-neutral-600">+RM{modifier.price.toFixed(2)}</span>
                   )}
                 </label>
               ))}
@@ -155,7 +155,7 @@ export default function MenuItemModal({ item, isOpen, onClose, onAddToCart }: Me
 
             <div className="text-right">
               <div className="text-2xl font-bold text-neutral-900">
-                ${calculateTotal().toFixed(2)}
+                RM{calculateTotal().toFixed(2)}
               </div>
               <button
                 onClick={handleAddToCart}
