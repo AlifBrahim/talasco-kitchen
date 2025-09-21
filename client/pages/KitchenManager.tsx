@@ -9,7 +9,9 @@ import {
   Loader2,
   Search,
   RefreshCw,
-  AlertTriangle
+  AlertTriangle,
+  Save,
+  Check
 } from 'lucide-react';
 import Link from 'next/link';
 import { GetKSMInventoryResponse } from '@shared/api';
@@ -31,6 +33,10 @@ export default function KitchenManager() {
   const [ksmStatus, setKsmStatus] = useState<'all' | 'in' | 'low' | 'out'>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingItem, setEditingItem] = useState<string | null>(null);
+  const [tempQuantity, setTempQuantity] = useState<number>(0);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Fetch KSM data only
   useEffect(() => {
@@ -96,6 +102,68 @@ export default function KitchenManager() {
         i.id === id ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i
       )
     );
+    setHasUnsavedChanges(true);
+  };
+
+  const startEditing = (item: InventoryItem) => {
+    setEditingItem(item.id);
+    setTempQuantity(item.quantity);
+  };
+
+  const cancelEditing = () => {
+    setEditingItem(null);
+    setTempQuantity(0);
+  };
+
+  const saveQuantity = async (id: string) => {
+    const item = inventory.find(i => i.id === id);
+    if (!item) return;
+
+    setSaving(id);
+    try {
+      // Call the API to save the quantity
+      const response = await fetch(`/api/inventory/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: tempQuantity })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save quantity');
+      }
+
+      const updatedItem = await response.json();
+      
+      // Update local state with the response from server
+      setInventory(prev =>
+        prev.map(i =>
+          i.id === id ? { 
+            ...i, 
+            quantity: updatedItem.quantity,
+            updated: updatedItem.updated
+          } : i
+        )
+      );
+      
+      setEditingItem(null);
+      setTempQuantity(0);
+      setHasUnsavedChanges(false);
+    } catch (error) {
+      console.error('Failed to save quantity:', error);
+      // Revert the change on error
+      setInventory(prev =>
+        prev.map(i =>
+          i.id === id ? { ...i, quantity: item.quantity } : i
+        )
+      );
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const handleQuantityChange = (value: string) => {
+    const numValue = parseInt(value) || 0;
+    setTempQuantity(Math.max(0, numValue));
   };
 
   return (
@@ -130,6 +198,12 @@ export default function KitchenManager() {
             <div className="flex items-center space-x-4">
               <span className="text-sm text-neutral-600">{ksmTotals.total} Items</span>
               <span className="text-sm text-neutral-600">{ksmTotals.low} Low Stock</span>
+              {hasUnsavedChanges && (
+                <div className="flex items-center space-x-2 text-orange-600">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                  <span className="text-sm font-medium">Unsaved changes</span>
+                </div>
+              )}
               <button className="bg-neutral-900 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-neutral-800 transition-colors">
                 <Plus className="h-4 w-4" />
                 <span className="text-sm font-medium">New Item</span>
@@ -290,18 +364,57 @@ export default function KitchenManager() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => adjustQty(item.id, -1)}
-                          className="h-8 w-8 rounded-full border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+                          className="h-8 w-8 rounded-full border border-neutral-300 text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
                           aria-label="Decrease"
+                          disabled={saving === item.id}
                         >
                           -
                         </button>
-                        <div className="text-neutral-900 font-semibold">
-                          {item.quantity} {item.unit}
-                        </div>
+                        
+                        {editingItem === item.id ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              value={tempQuantity}
+                              onChange={(e) => handleQuantityChange(e.target.value)}
+                              className="w-16 px-2 py-1 text-center border-2 border-blue-400 rounded text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                              min="0"
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => saveQuantity(item.id)}
+                              className="h-6 w-6 rounded bg-green-600 text-white hover:bg-green-700 flex items-center justify-center"
+                              disabled={saving === item.id}
+                            >
+                              {saving === item.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Check className="h-3 w-3" />
+                              )}
+                            </button>
+                            <button
+                              onClick={cancelEditing}
+                              className="h-6 w-6 rounded bg-neutral-300 text-neutral-700 hover:bg-neutral-400 flex items-center justify-center"
+                              disabled={saving === item.id}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ) : (
+                          <div 
+                            className="text-neutral-900 font-semibold cursor-pointer hover:bg-neutral-50 px-2 py-1 rounded border border-neutral-300 hover:border-blue-400 transition-colors"
+                            onClick={() => startEditing(item)}
+                            title="Click to edit quantity"
+                          >
+                            {item.quantity} {item.unit}
+                          </div>
+                        )}
+                        
                         <button
                           onClick={() => adjustQty(item.id, +1)}
-                          className="h-8 w-8 rounded-full border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+                          className="h-8 w-8 rounded-full border border-neutral-300 text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
                           aria-label="Increase"
+                          disabled={saving === item.id}
                         >
                           +
                         </button>
