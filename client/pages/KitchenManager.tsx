@@ -791,7 +791,7 @@ export default function KitchenManager() {
                           {item.recommendedQty} {item.unit}
                         </div>
                         <div className="text-sm text-neutral-500">
-                          ~${item.estimatedCost.toFixed(2)}
+                          ~RM{item.estimatedCost.toFixed(2)}
                         </div>
                       </div>
                     </div>
@@ -803,7 +803,7 @@ export default function KitchenManager() {
                   <div className="flex justify-between items-center">
                     <span className="font-bold text-neutral-900">TOTAL ESTIMATED COST:</span>
                     <span className="font-bold text-2xl text-neutral-900">
-                      ${aiPrepItems.reduce((sum, item) => sum + item.estimatedCost, 0).toFixed(2)}
+                      RM{aiPrepItems.reduce((sum, item) => sum + item.estimatedCost, 0).toFixed(2)}
                     </span>
                   </div>
                 </div>

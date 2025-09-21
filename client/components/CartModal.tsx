@@ -144,7 +144,7 @@ export default function CartModal({
                   <div key={item.id} className="flex items-center space-x-4 p-4 bg-neutral-50 rounded-lg">
                       <div className="flex-1">
                       <h4 className="font-semibold text-neutral-900">{item.name}</h4>
-                        <p className="text-sm text-neutral-600">${item.price.toFixed(2)} each</p>
+                        <p className="text-sm text-neutral-600">RM{item.price.toFixed(2)} each</p>
                       </div>
                         <div className="flex items-center space-x-2">
                           <button
@@ -162,7 +162,7 @@ export default function CartModal({
                           </button>
                         </div>
                         <div className="text-right">
-                      <p className="font-semibold text-neutral-900">${(item.price * item.quantity).toFixed(2)}</p>
+                      <p className="font-semibold text-neutral-900">RM{(item.price * item.quantity).toFixed(2)}</p>
                         <button
                           onClick={() => onRemoveFromCart(item.id)}
                         className="text-red-600 hover:text-red-800 mt-1"
@@ -194,15 +194,15 @@ export default function CartModal({
                 <div className="space-y-2 mb-4">
                   <div className="flex justify-between">
                     <span className="text-neutral-600">Subtotal</span>
-                    <span className="font-medium">${subtotal.toFixed(2)}</span>
+                    <span className="font-medium">RM{subtotal.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-neutral-600">Tax (8%)</span>
-                    <span className="font-medium">${tax.toFixed(2)}</span>
+                    <span className="font-medium">RM{tax.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-lg font-bold border-t pt-2">
                       <span>Total</span>
-                      <span>${total.toFixed(2)}</span>
+                      <span>RM{total.toFixed(2)}</span>
                     </div>
         </div>
 

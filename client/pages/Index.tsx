@@ -38,6 +38,11 @@ export default function Index() {
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [showCart, setShowCart] = useState(false);
+  const [notifications, setNotifications] = useState<Array<{
+    id: string;
+    itemName: string;
+    timestamp: number;
+  }>>([]);
 
   // Fetch stock availability
   const fetchStockAvailability = async () => {
@@ -176,8 +181,23 @@ export default function Index() {
       [itemId]: (prev[itemId] || 0) + quantity
     }));
     
+    // Add success notification to stack
+    const itemName = menuItems.find(item => item.id === itemId)?.name || 'Item';
+    const notificationId = `notification-${Date.now()}-${Math.random()}`;
+    
+    setNotifications(prev => [...prev, {
+      id: notificationId,
+      itemName,
+      timestamp: Date.now()
+    }]);
+    
+    // Remove notification after 3 seconds
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(notif => notif.id !== notificationId));
+    }, 3000);
+    
     // Show notification or feedback
-    console.log(`Added ${quantity}x ${item?.name} to cart`);
+    console.log(`Added ${quantity}x ${itemName} to cart`);
     if (specialInstructions) {
       console.log(`Special instructions: ${specialInstructions}`);
     }
@@ -469,6 +489,30 @@ export default function Index() {
         onRemoveFromCart={removeFromCart}
         onClearCart={clearCart}
       />
+
+      {/* Add to Cart Success Notifications Stack */}
+      <div className="fixed top-4 right-4 z-50 space-y-2">
+        {notifications.map((notification, index) => (
+          <div
+            key={notification.id}
+            className="bg-green-500 text-white px-6 py-4 rounded-lg shadow-lg flex items-center space-x-3 animate-slide-in"
+            style={{
+              transform: `translateY(${index * 8}px)`,
+              zIndex: 50 - index
+            }}
+          >
+            <div className="bg-white bg-opacity-20 rounded-full p-1">
+              <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div>
+              <p className="font-semibold">Added Successfully!</p>
+              <p className="text-sm text-green-100">{notification.itemName} added to cart</p>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
