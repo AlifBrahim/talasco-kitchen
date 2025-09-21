@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Image, { type StaticImageData } from 'next/image';
 import { ShoppingCart, Utensils, Plus, Monitor, ChefHat, Loader2, Eye } from 'lucide-react';
 import Link from 'next/link';
-import { MenuItem as DBMenuItem, GetMenuItemsResponse } from '@shared/api';
+import { MenuItem as DBMenuItem, GetMenuItemsResponse, MenuItemAvailability, GetMenuAvailabilityResponse } from '@shared/api';
 import MenuItemModal from '@/components/MenuItemModal';
 import CartModal from '@/components/CartModal';
 
@@ -19,6 +19,10 @@ interface MenuItem {
   category: 'main' | 'desserts' | 'drinks';
   badge?: string;
   avg_prep_minutes?: number;
+  // Stock availability
+  available?: boolean;
+  stockStatus?: 'available' | 'low_stock' | 'out_of_stock';
+  missingIngredients?: string[];
 }
 
 // Default menu items (fallback)
@@ -30,56 +34,104 @@ export default function Index() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>(defaultMenuItems);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [stockAvailability, setStockAvailability] = useState<{[key: string]: MenuItemAvailability}>({});
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [showCart, setShowCart] = useState(false);
 
+  // Fetch stock availability
+  const fetchStockAvailability = async () => {
+    try {
+      const response = await fetch('/api/menu-items/availability');
+      if (!response.ok) {
+        throw new Error('Failed to fetch stock availability');
+      }
+      
+      const data: GetMenuAvailabilityResponse = await response.json();
+      
+      // Convert to lookup object
+      const availabilityMap = data.items.reduce((acc, item) => {
+        acc[item.itemid.toString()] = item;
+        return acc;
+      }, {} as {[key: string]: MenuItemAvailability});
+      
+      setStockAvailability(availabilityMap);
+    } catch (err) {
+      console.error('Error fetching stock availability:', err);
+      // Don't show error for availability, just log it
+    }
+  };
+
   // Fetch menu items from API
   useEffect(() => {
-    const fetchMenuItems = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
         
-        const response = await fetch('/api/menu-items?active=true');
-        if (!response.ok) {
+        // Fetch menu items and stock availability in parallel
+        const [menuResponse, availabilityResponse] = await Promise.allSettled([
+          fetch('/api/menu-items?active=true'),
+          fetch('/api/menu-items/availability')
+        ]);
+
+        // Handle menu items
+        if (menuResponse.status === 'fulfilled' && menuResponse.value.ok) {
+          const menuData: GetMenuItemsResponse = await menuResponse.value.json();
+          
+          // Handle stock availability  
+          let availabilityMap: {[key: string]: MenuItemAvailability} = {};
+          if (availabilityResponse.status === 'fulfilled' && availabilityResponse.value.ok) {
+            const availabilityData: GetMenuAvailabilityResponse = await availabilityResponse.value.json();
+            availabilityMap = availabilityData.items.reduce((acc, item) => {
+              acc[item.itemid.toString()] = item;
+              return acc;
+            }, {} as {[key: string]: MenuItemAvailability});
+            setStockAvailability(availabilityMap);
+          }
+          
+          // Transform database menu items to UI format with availability
+          const transformedItems: MenuItem[] = menuData.menu_items.map((dbItem: DBMenuItem) => {
+            const availability = availabilityMap[dbItem.id];
+            return {
+              id: dbItem.id,
+              name: dbItem.name,
+              description: `Delicious ${dbItem.name.toLowerCase()}`, // Generate description
+              price: dbItem.price ?? 0,
+              image: dbItem.image_path || defaultImage,
+              category: mapCategoryToUI(dbItem.category),
+              badge: dbItem.category === 'Pizza' ? 'Veg' : undefined,
+              avg_prep_minutes: dbItem.avg_prep_minutes,
+              // Add availability info
+              available: availability?.available ?? true,
+              stockStatus: availability?.stockStatus ?? 'available',
+              missingIngredients: availability?.missingIngredients ?? []
+            };
+          });
+          
+          setMenuItems(transformedItems);
+
+          setCart(prevCart => {
+            const validIds = new Set(transformedItems.map(item => item.id));
+            let mutated = false;
+            const nextEntries = Object.entries(prevCart).filter(([itemId]) => {
+              const keep = validIds.has(itemId);
+              if (!keep) mutated = true;
+              return keep;
+            });
+
+            if (!mutated) {
+              return prevCart;
+            }
+
+            const nextCart = Object.fromEntries(nextEntries) as typeof prevCart;
+            return nextCart;
+          });
+        } else {
           throw new Error('Failed to fetch menu items');
         }
-        
-        const data: GetMenuItemsResponse = await response.json();
-        
-        // Transform database menu items to UI format
-        const transformedItems: MenuItem[] = data.menu_items.map((dbItem: DBMenuItem) => ({
-          id: dbItem.id,
-          name: dbItem.name,
-          description: `Delicious ${dbItem.name.toLowerCase()}`, // Generate description
-          price: dbItem.price ?? 0,
-          image: dbItem.image_path || defaultImage,  // ← use path from DB
-          category: mapCategoryToUI(dbItem.category),
-          badge: dbItem.category === 'Pizza' ? 'Veg' : undefined,
-          avg_prep_minutes: dbItem.avg_prep_minutes
-        }));
-        
-        setMenuItems(transformedItems);
-
-        setCart(prevCart => {
-          const validIds = new Set(transformedItems.map(item => item.id));
-          let mutated = false;
-          const nextEntries = Object.entries(prevCart).filter(([itemId]) => {
-            const keep = validIds.has(itemId);
-            if (!keep) mutated = true;
-            return keep;
-          });
-
-          if (!mutated) {
-            return prevCart;
-          }
-
-          const nextCart = Object.fromEntries(nextEntries) as typeof prevCart;
-          return nextCart;
-        });
       } catch (err) {
-        console.error('Error fetching menu items:', err);
+        console.error('Error fetching data:', err);
         setError('Failed to load menu items. Using default menu.');
         // Keep default menu items as fallback
       } finally {
@@ -87,7 +139,11 @@ export default function Index() {
       }
     };
 
-    fetchMenuItems();
+    fetchData();
+    
+    // Refresh stock availability every 30 seconds
+    const interval = setInterval(fetchStockAvailability, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // Map database categories to UI categories
@@ -101,15 +157,34 @@ export default function Index() {
   };
 
   const addToCart = (itemId: string, quantity: number = 1, specialInstructions?: string) => {
+    const item = menuItems.find(item => item.id === itemId);
+    
+    // Check availability before adding to cart
+    if (!item?.available) {
+      const missingItems = item?.missingIngredients?.join(', ') || 'Unknown ingredients';
+      alert(`Sorry, ${item?.name} is currently unavailable.\n\nMissing ingredients: ${missingItems}\n\nPlease ask staff to restock first.`);
+      return;
+    }
+    
+    // Check if adding to cart would exceed stock
+    const currentCartQuantity = cart[itemId] || 0;
+    const totalQuantity = currentCartQuantity + quantity;
+    
+    // For now, we'll allow adding but could add more sophisticated stock checking here
     setCart(prev => ({
       ...prev,
       [itemId]: (prev[itemId] || 0) + quantity
     }));
     
     // Show notification or feedback
-    console.log(`Added ${quantity}x ${menuItems.find(item => item.id === itemId)?.name} to cart`);
+    console.log(`Added ${quantity}x ${item?.name} to cart`);
     if (specialInstructions) {
       console.log(`Special instructions: ${specialInstructions}`);
+    }
+    
+    // Show warning for low stock items
+    if (item?.stockStatus === 'low_stock') {
+      console.warn(`⚠️ ${item.name} is running low on ingredients`);
     }
   };
 
@@ -271,32 +346,87 @@ export default function Index() {
         {!loading && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredItems.map((item) => (
-            <div key={item.id} className="bg-white rounded-lg shadow-sm border border-neutral-200 overflow-hidden hover:shadow-md transition-shadow">
+            <div key={item.id} className={`bg-white rounded-lg shadow-sm border overflow-hidden transition-shadow ${
+              item.available 
+                ? 'border-neutral-200 hover:shadow-md' 
+                : 'border-red-200 bg-gray-50 opacity-75'
+            }`}>
               <div className="relative">
                 <Image
                   src={item.image}   // expects '/...' under public
                   alt={item.name}
                   width={600}
                   height={400}
-                  className="w-full h-48 object-cover"
+                  className={`w-full h-48 object-cover ${!item.available ? 'grayscale' : ''}`}
                 />
+                {/* Stock Status Badge */}
+                {item.stockStatus && (
+                  <span className={`absolute top-3 right-3 text-white text-xs px-2 py-1 rounded-full ${
+                    item.stockStatus === 'available' ? 'bg-green-500' :
+                    item.stockStatus === 'low_stock' ? 'bg-yellow-500' :
+                    'bg-red-500'
+                  }`}>
+                    {item.stockStatus === 'available' ? 'Available' :
+                     item.stockStatus === 'low_stock' ? 'Low Stock' :
+                     'Out of Stock'}
+                  </span>
+                )}
                 {item.badge && (
                   <span className="absolute top-3 left-3 bg-status-ready text-white text-xs px-2 py-1 rounded-full">
                     {item.badge}
                   </span>
                 )}
+                {!item.available && (
+                  <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
+                    <span className="bg-red-600 text-white px-3 py-1 rounded-lg text-sm font-medium">
+                      Unavailable
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="p-4">
-                <h3 className="font-semibold text-lg text-neutral-900 mb-2">{item.name}</h3>
-                <p className="text-sm text-neutral-600 mb-4 line-clamp-2">{item.description}</p>
+                <h3 className={`font-semibold text-lg mb-2 ${item.available ? 'text-neutral-900' : 'text-gray-600'}`}>
+                  {item.name}
+                </h3>
+                <p className={`text-sm mb-4 line-clamp-2 ${item.available ? 'text-neutral-600' : 'text-gray-500'}`}>
+                  {item.description}
+                </p>
+                
+                {/* Show missing ingredients for unavailable items */}
+                {!item.available && item.missingIngredients && item.missingIngredients.length > 0 && (
+                  <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                    <div className="font-medium mb-1">Missing ingredients:</div>
+                    <div className="text-xs">{item.missingIngredients.slice(0, 2).join(', ')}</div>
+                    {item.missingIngredients.length > 2 && (
+                      <div className="text-xs text-red-600">+{item.missingIngredients.length - 2} more</div>
+                    )}
+                  </div>
+                )}
+                
+                {/* Low stock warning */}
+                {item.available && item.stockStatus === 'low_stock' && (
+                  <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
+                    <div className="font-medium">⚠️ Running low on ingredients</div>
+                  </div>
+                )}
+                
                 <div className="flex items-center justify-between">
-                  <span className="text-xl font-bold text-neutral-900">RM{item.price}</span>
+                  <span className={`text-xl font-bold ${item.available ? 'text-neutral-900' : 'text-gray-500'}`}>
+                    RM{item.price}
+                  </span>
                   <button
                     onClick={() => addToCart(item.id)}
-                    className="bg-neutral-900 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-neutral-800 transition-colors"
+                    disabled={!item.available}
+                    className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
+                      item.available 
+                        ? 'bg-neutral-900 text-white hover:bg-neutral-800' 
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
                   >
                     <Plus className="h-4 w-4" />
-                    <span className="text-sm font-medium">Add</span>
+                    <span className="text-sm font-medium">
+                      {item.available ? 'Add' : 'Restock First'}
+                    </span>
                   </button>
                 </div>
               </div>
