@@ -14,6 +14,7 @@ type SimpleOrderRow = {
   sku: string;
   price: number;
   category: string;
+  prep_time_minutes: number | null;
 };
 
 export async function GET(request: NextRequest) {
@@ -44,7 +45,8 @@ export async function GET(request: NextRequest) {
         oi.quantity,
         m.sku,
         m.price,
-        m.category
+        m.category,
+        m.prep_time_minutes
       FROM orders o
       JOIN orderitems oi ON o.orderid = oi.orderid
       JOIN menuitems m ON oi.itemid = m.itemid
@@ -80,7 +82,7 @@ export async function GET(request: NextRequest) {
         qty: row.quantity,
         notes: null,
         status: 'queued', // Default since not in orderitems schema
-        predicted_prep_minutes: null,
+        predicted_prep_minutes: row.prep_time_minutes ?? null,
         actual_prep_seconds: null,
         created_at: row.orderdate.toISOString(),
         started_at: null,
@@ -93,7 +95,8 @@ export async function GET(request: NextRequest) {
           price: Number(row.price),
           is_active: true,
           org_id: '1',
-          created_at: row.orderdate.toISOString()
+          created_at: row.orderdate.toISOString(),
+          avg_prep_minutes: row.prep_time_minutes ?? undefined
         },
         kds_tickets: []
       });

@@ -10,6 +10,7 @@ type MenuItemRow = {
   category: string;
   is_active: boolean;
   image_path: string | null;
+  prep_time_minutes?: number | null;
 };
 
 // Map SKU to image filename
@@ -55,7 +56,8 @@ export async function GET(request: NextRequest) {
          price,
          category,
          is_active,
-         image_path
+         image_path,
+         prep_time_minutes
        FROM menuitems
        ${whereClause}
        ORDER BY itemid DESC`,
@@ -70,7 +72,7 @@ export async function GET(request: NextRequest) {
         name: row.itemname,
         category: row.category,
         is_active: row.is_active,
-        avg_prep_minutes: undefined,
+        avg_prep_minutes: row.prep_time_minutes ?? undefined,
         created_at: new Date().toISOString(),
         price: Number(row.price),
         image_path: row.image_path || getImagePath(row.sku), // Use DB value or map from SKU

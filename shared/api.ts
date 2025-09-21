@@ -100,7 +100,7 @@ export interface OrderItem {
   menu_item_id: string;
   qty: number;
   notes?: string;
-  status: 'queued' | 'firing' | 'prepping' | 'passed' | 'served' | 'cancelled';
+  status: 'queued' | 'firing' | 'prepping' | 'passed' | 'served' | 'cancelled' | 'completed';
   predicted_prep_minutes?: number;
   actual_prep_seconds?: number;
   created_at: string;
@@ -181,7 +181,9 @@ export interface UpdateOrderItemStatusRequest {
 
 export interface UpdateOrderItemStatusResponse {
   success: boolean;
-  order_item: OrderItem;
+  order_item?: OrderItem;
+  orderItem?: OrderItem;
+  message?: string;
 }
 
 // =========
