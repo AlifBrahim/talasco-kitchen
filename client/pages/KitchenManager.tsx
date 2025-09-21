@@ -14,7 +14,8 @@ import {
   Check,
   Brain,
   ShoppingCart,
-  X
+  X,
+  CheckCircle
 } from 'lucide-react';
 import Link from 'next/link';
 import { GetKSMInventoryResponse } from '@shared/api';
@@ -54,6 +55,10 @@ export default function KitchenManager() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showAIPrepModal, setShowAIPrepModal] = useState(false);
   const [aiPrepItems, setAiPrepItems] = useState<AIPrepItem[]>([]);
+  const [showSuccessAlert, setShowSuccessAlert] = useState(false);
+  const [isSavingAll, setIsSavingAll] = useState(false);
+  const [modifiedItems, setModifiedItems] = useState<Set<string>>(new Set());
+  const [originalQuantities, setOriginalQuantities] = useState<Map<string, number>>(new Map());
 
   // Fetch KSM data only
   useEffect(() => {
@@ -115,10 +120,18 @@ export default function KitchenManager() {
   
   const adjustQty = (id: string, delta: number) => {
     setInventory(prev =>
-      prev.map(i =>
-        i.id === id ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i
-      )
+      prev.map(i => {
+        if (i.id === id) {
+          // Store original quantity if this is the first modification
+          if (!modifiedItems.has(id)) {
+            setOriginalQuantities(prev => new Map(prev).set(id, i.quantity));
+          }
+          return { ...i, quantity: Math.max(0, i.quantity + delta) };
+        }
+        return i;
+      })
     );
+    setModifiedItems(prev => new Set(prev).add(id));
     setHasUnsavedChanges(true);
   };
 
@@ -162,9 +175,18 @@ export default function KitchenManager() {
         )
       );
       
+      // Remove from modified items and update unsaved changes
+      setModifiedItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
+      
       setEditingItem(null);
       setTempQuantity(0);
-      setHasUnsavedChanges(false);
+      
+      // Update hasUnsavedChanges based on remaining modified items
+      setHasUnsavedChanges(modifiedItems.size > 1);
     } catch (error) {
       console.error('Failed to save quantity:', error);
       // Revert the change on error
@@ -275,6 +297,114 @@ export default function KitchenManager() {
       case 'medium': return '🟡';
       case 'low': return '🟢';
       default: return '⚪';
+    }
+  };
+
+  const saveIndividualItem = async (id: string) => {
+    const item = inventory.find(i => i.id === id);
+    if (!item) return;
+
+    setSaving(id);
+    try {
+      // Call the API to save the quantity
+      const response = await fetch(`/api/inventory/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: item.quantity })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save quantity');
+      }
+
+      const updatedItem = await response.json();
+      
+      // Update local state with the response from server
+      setInventory(prev =>
+        prev.map(i =>
+          i.id === id ? { 
+            ...i, 
+            quantity: updatedItem.quantity,
+            updated: updatedItem.updated
+          } : i
+        )
+      );
+      
+      // Remove from modified items and original quantities
+      setModifiedItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(id);
+        return newSet;
+      });
+      
+      setOriginalQuantities(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(id);
+        return newMap;
+      });
+      
+      // Update hasUnsavedChanges
+      setHasUnsavedChanges(modifiedItems.size > 1);
+      
+      // Show success alert
+      setShowSuccessAlert(true);
+      setTimeout(() => setShowSuccessAlert(false), 3000);
+      
+    } catch (error) {
+      console.error('Failed to save quantity:', error);
+      alert('Failed to save changes. Please try again.');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const cancelIndividualItem = (id: string) => {
+    // Get the original quantity
+    const originalQty = originalQuantities.get(id);
+    if (originalQty !== undefined) {
+      // Reset the item to its original quantity
+      setInventory(prev =>
+        prev.map(i =>
+          i.id === id ? { ...i, quantity: originalQty } : i
+        )
+      );
+    }
+    
+    // Remove from modified items and original quantities
+    setModifiedItems(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(id);
+      return newSet;
+    });
+    
+    setOriginalQuantities(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(id);
+      return newMap;
+    });
+    
+    // Update hasUnsavedChanges
+    setHasUnsavedChanges(modifiedItems.size > 1);
+  };
+
+  const saveAllChanges = async () => {
+    if (!hasUnsavedChanges) return;
+    
+    setIsSavingAll(true);
+    try {
+      // Save all modified items
+      const savePromises = Array.from(modifiedItems).map(id => saveIndividualItem(id));
+      await Promise.all(savePromises);
+      
+      // Clear all modified items
+      setModifiedItems(new Set());
+      setHasUnsavedChanges(false);
+      
+    } catch (error) {
+      console.error('Failed to save changes:', error);
+      alert('Failed to save changes. Please try again.');
+    } finally {
+      setIsSavingAll(false);
     }
   };
 
@@ -537,8 +667,41 @@ export default function KitchenManager() {
                         <div className="text-xs text-neutral-400 mt-1">
                           Updated {new Date(item.updated).toLocaleDateString()}
                         </div>
-                  </div>
+                      </div>
                     </div>
+                    
+                    {/* Individual Action Buttons */}
+                    {modifiedItems.has(item.id) && (
+                      <div className="mt-3 pt-3 border-t border-neutral-200">
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => cancelIndividualItem(item.id)}
+                            disabled={saving === item.id}
+                            className="flex-1 px-3 py-2 bg-neutral-300 text-neutral-700 rounded-lg text-sm font-medium hover:bg-neutral-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                          >
+                            <X className="h-4 w-4" />
+                            <span>Cancel</span>
+                          </button>
+                          <button
+                            onClick={() => saveIndividualItem(item.id)}
+                            disabled={saving === item.id}
+                            className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                          >
+                            {saving === item.id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <span>Saving...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Save className="h-4 w-4" />
+                                <span>Save</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -688,6 +851,19 @@ export default function KitchenManager() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Alert */}
+      {showSuccessAlert && (
+        <div className="fixed top-4 right-4 z-50">
+          <div className="bg-green-500 text-white px-6 py-4 rounded-lg shadow-lg flex items-center space-x-3 animate-slide-in">
+            <CheckCircle className="h-5 w-5" />
+            <div>
+              <p className="font-semibold">Changes Saved Successfully!</p>
+              <p className="text-sm text-green-100">All inventory updates have been saved.</p>
             </div>
           </div>
         </div>
