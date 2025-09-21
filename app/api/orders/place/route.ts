@@ -13,10 +13,10 @@ export async function POST(request: NextRequest) {
   try {
     const body: PlaceOrderRequest = await request.json();
     
-    // Insert order with 'in_progress' status instead of 'open'
+    // Insert order with 'in_progress' status and start timing
     const orderResult = await dbQuery(`
-      INSERT INTO orders (tablenumber, status, orderdate)
-      VALUES ($1, 'in_progress', CURRENT_TIMESTAMP)
+      INSERT INTO orders (tablenumber, status, orderdate, started_at)
+      VALUES ($1, 'in_progress', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING orderid
     `, [body.tableNumber || null]);
 

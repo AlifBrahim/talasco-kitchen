@@ -20,10 +20,12 @@ interface Order {
   id: string;
   tableNumber?: string;
   customerName?: string;
-  status: 'open' | 'in_progress' | 'ready' | 'served' | 'cancelled';
+  status: 'open' | 'in_progress' | 'ready' | 'served' | 'cancelled' | 'completed';
   items: OrderItem[];
   specialRequests?: string;
   timestamp: string;
+  startedAt?: string;
+  completedAt?: string;
   totalTime?: string;
   source: string;
 }
@@ -61,7 +63,7 @@ export default function KitchenDisplay() {
         setLoading(true);
         setError(null);
         
-        const response = await fetch('/api/orders/simple?status=in_progress,ready');
+        const response = await fetch('/api/orders/simple?status=in_progress,ready,served');
         if (!response.ok) {
           throw new Error('Failed to fetch orders');
         }
@@ -75,6 +77,8 @@ export default function KitchenDisplay() {
           customerName: dbOrder.customer_name,
           status: dbOrder.status,
           timestamp: formatTimeAgo(dbOrder.placed_at),
+          startedAt: dbOrder.started_at,
+          completedAt: dbOrder.completed_at,
           source: dbOrder.source,
           items: dbOrder.order_items.map((item) => ({
             id: item.id,
@@ -125,6 +129,21 @@ export default function KitchenDisplay() {
     return `${diffInDays}d ago`;
   };
 
+  // Calculate elapsed time from start to now (or completion)
+  const getElapsedTime = (startedAt: string | null, completedAt?: string | null): string => {
+    if (!startedAt) return '0m';
+    
+    const start = new Date(startedAt);
+    const end = completedAt ? new Date(completedAt) : new Date();
+    const diffInMinutes = Math.floor((end.getTime() - start.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 60) return `${diffInMinutes}m`;
+    
+    const hours = Math.floor(diffInMinutes / 60);
+    const minutes = diffInMinutes % 60;
+    return `${hours}h ${minutes}m`;
+  };
+
   const updateOrderItemStatus = async (orderId: string, itemId: string, newStatus: OrderItem['status']) => {
     try {
       const request: UpdateOrderItemStatusRequest = {
@@ -165,10 +184,76 @@ export default function KitchenDisplay() {
     }
   };
 
-  const updateOrderStatus = (orderId: string, newStatus: Order['status']) => {
+  const updateOrderStatus = async (orderId: string, newStatus: Order['status']) => {
+    try {
+      console.log('Updating order status:', { orderId, newStatus });
+      
+      const response = await fetch(`/api/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update order status');
+      }
+
+      const data = await response.json();
+      console.log('Order status updated successfully:', data);
+
+      // Update local state
     setOrders(prev => prev.map(order => 
       order.id === orderId ? { ...order, status: newStatus } : order
     ));
+
+      // If marked as completed, refresh the orders list to remove completed orders
+      if (newStatus === 'completed') {
+        setTimeout(() => {
+          // Refresh orders by calling the fetch function
+          const refreshOrders = async () => {
+            try {
+              const response = await fetch('/api/orders/simple?status=in_progress,ready,served');
+              if (response.ok) {
+                const data = await response.json();
+                const transformedOrders = data.orders.map((dbOrder: any) => ({
+                  id: dbOrder.id,
+                  tableNumber: dbOrder.table_number,
+                  customerName: dbOrder.customer_name,
+                  status: dbOrder.status,
+                  timestamp: formatTimeAgo(dbOrder.placed_at),
+                  source: dbOrder.source,
+                  items: dbOrder.order_items.map((item: any) => ({
+                    id: item.id,
+                    name: item.menu_item.name,
+                    note: item.notes,
+                    qty: item.qty,
+                    status: item.status,
+                    predicted_prep_minutes: item.predicted_prep_minutes,
+                    started_at: item.started_at,
+                    completed_at: item.completed_at
+                  })),
+                  specialRequests: dbOrder.order_items
+                    .filter((item: any) => item.notes)
+                    .map((item: any) => item.notes)
+                    .join(', ')
+                }));
+                setOrders(transformedOrders);
+              }
+            } catch (error) {
+              console.error('Error refreshing orders:', error);
+            }
+          };
+          refreshOrders();
+        }, 1000);
+      }
+
+    } catch (error) {
+      console.error('Error updating order status:', error);
+      alert(`Failed to update order status: ${error.message}`);
+    }
   };
 
   const openOrderModal = (order: Order) => {
@@ -187,6 +272,7 @@ export default function KitchenDisplay() {
       case 'in_progress': return 'bg-yellow-500';
       case 'ready': return 'bg-green-500';
       case 'served': return 'bg-gray-500';
+      case 'completed': return 'bg-purple-500';
       case 'cancelled': return 'bg-red-500';
       default: return 'bg-neutral-400';
     }
@@ -222,7 +308,7 @@ export default function KitchenDisplay() {
   };
 
   const getActiveOrdersCount = () => {
-    return orders.filter(order => order.status === 'open' || order.status === 'in_progress').length;
+    return orders.filter(order => order.status === 'in_progress' || order.status === 'ready').length;
   };
 
   // Helper function to get all food items from orders for AI queue
@@ -265,147 +351,150 @@ export default function KitchenDisplay() {
 
   const renderOrderCard = (order: Order) => (
     <>
-      {/* Order Header */}
-      <div className="bg-neutral-50 px-4 py-3 border-b border-neutral-200">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <span className="text-lg font-bold text-neutral-900">#{order.id}</span>
-            <span className="text-sm text-neutral-600">Table {order.tableNumber}</span>
-            <span className="flex items-center text-sm text-neutral-500">
-              <Clock className="h-4 w-4 mr-1" />
-              {order.timestamp}
-            </span>
-          </div>
-          <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)} ${getStatusTextColor(order.status)}`}>
-            {order.status === 'open' ? 'New Order' : 
-             order.status === 'in_progress' ? 'In Progress' :
-             order.status === 'ready' ? 'Ready' : 
-             order.status === 'served' ? 'Served' : 'Cancelled'}
-          </span>
-        </div>
-        <div className="mt-1">
-          <span className="text-sm text-neutral-600">{order.customerName}</span>
-        </div>
-      </div>
-
-      {/* Order Items */}
-      <div className="p-4">
-        <div className="space-y-2 mb-4">
-          {order.items.map((item, index) => (
-            <div key={item.id} className="flex items-start space-x-2">
-              <span className="flex-shrink-0 w-6 h-6 bg-neutral-900 text-white text-xs rounded-full flex items-center justify-center font-medium">
-                {index + 1}
-              </span>
-              <div className="flex-1">
+              {/* Order Header */}
+              <div className="bg-neutral-50 px-4 py-3 border-b border-neutral-200">
                 <div className="flex items-center justify-between">
-                  <div className="font-medium text-neutral-900">
-                    {item.name} {item.qty > 1 && `(x${item.qty})`}
+                  <div className="flex items-center space-x-3">
+                    <span className="text-lg font-bold text-neutral-900">#{order.id}</span>
+                    <span className="text-sm text-neutral-600">Table {order.tableNumber}</span>
+                    <span className="flex items-center text-sm text-neutral-500">
+                      <Clock className="h-4 w-4 mr-1" />
+                      {order.timestamp}
+                    </span>
+            {order.startedAt && (
+              <span className="flex items-center text-sm font-medium text-blue-600">
+                <Clock className="h-4 w-4 mr-1" />
+                {getElapsedTime(order.startedAt, order.completedAt)}
+              </span>
+            )}
                   </div>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getItemStatusColor(item.status)}`}>
-                    {item.status}
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)} ${getStatusTextColor(order.status)}`}>
+                    {order.status === 'open' ? 'New Order' : 
+                     order.status === 'in_progress' ? 'In Progress' :
+                     order.status === 'ready' ? 'Ready' : 
+             order.status === 'served' ? 'Served' : 
+             order.status === 'completed' ? 'Completed' : 'Cancelled'}
                   </span>
                 </div>
-                {item.note && (
-                  <div className="text-sm text-neutral-600 italic">Note: {item.note}</div>
-                )}
-                {item.predicted_prep_minutes && (
-                  <div className="text-xs text-neutral-500">
-                    Est. {item.predicted_prep_minutes} min
+                <div className="mt-1">
+                  <span className="text-sm text-neutral-600">{order.customerName}</span>
+                </div>
+              </div>
+
+              {/* Order Items */}
+              <div className="p-4">
+                <div className="space-y-2 mb-4">
+                  {order.items.map((item, index) => (
+                    <div key={item.id} className="flex items-start space-x-2">
+                      <span className="flex-shrink-0 w-6 h-6 bg-neutral-900 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                        {index + 1}
+                      </span>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <div className="font-medium text-neutral-900">
+                            {item.name} {item.qty > 1 && `(x${item.qty})`}
+                          </div>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getItemStatusColor(item.status)}`}>
+                            {item.status}
+                          </span>
+                        </div>
+                        {item.note && (
+                          <div className="text-sm text-neutral-600 italic">Note: {item.note}</div>
+                        )}
+                        {item.predicted_prep_minutes && (
+                          <div className="text-xs text-neutral-500">
+                            Est. {item.predicted_prep_minutes} min
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {order.specialRequests && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                    <div className="text-sm font-medium text-amber-800 mb-1">Special Requests:</div>
+                    <div className="text-sm text-amber-700">{order.specialRequests}</div>
                   </div>
                 )}
-              </div>
-            </div>
-          ))}
-        </div>
 
-        {order.specialRequests && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-            <div className="text-sm font-medium text-amber-800 mb-1">Special Requests:</div>
-            <div className="text-sm text-amber-700">{order.specialRequests}</div>
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
-          <div className="flex space-x-2 mb-2">
+                {/* Action Buttons */}
+                <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex space-x-2 mb-2">
+                    <button
+                      onClick={() => openOrderModal(order)}
+                      className="flex-1 bg-neutral-100 text-neutral-700 py-2 px-4 rounded-lg text-sm font-medium hover:bg-neutral-200 transition-colors flex items-center justify-center space-x-1"
+                    >
+                      <Eye className="h-4 w-4" />
+                      <span>View Details</span>
+                    </button>
+                  </div>
+                  
+                  {order.status === 'in_progress' && (
+                    <button
+                      onClick={() => updateOrderStatus(order.id, 'ready')}
+                      className="w-full bg-green-600 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+                    >
+                      Mark Ready
+                    </button>
+                  )}
+                  {order.status === 'ready' && (
+                    <button
+                      onClick={() => updateOrderStatus(order.id, 'served')}
+                      className="w-full bg-neutral-900 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-neutral-800 transition-colors flex items-center justify-center space-x-2"
+                    >
+                      <Check className="h-4 w-4" />
+                      <span>Mark Served</span>
+                    </button>
+                  )}
+                  {order.status === 'served' && (
             <button
-              onClick={() => openOrderModal(order)}
-              className="flex-1 bg-neutral-100 text-neutral-700 py-2 px-4 rounded-lg text-sm font-medium hover:bg-neutral-200 transition-colors flex items-center justify-center space-x-1"
-            >
-              <Eye className="h-4 w-4" />
-              <span>View Details</span>
-            </button>
-          </div>
-          
-          {order.status === 'open' && (
-            <button
-              onClick={() => updateOrderStatus(order.id, 'in_progress')}
-              className="w-full bg-neutral-900 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-neutral-800 transition-colors"
-            >
-              Start Order
-            </button>
-          )}
-          {order.status === 'in_progress' && (
-            <button
-              onClick={() => updateOrderStatus(order.id, 'ready')}
-              className="w-full bg-green-600 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
-            >
-              Mark Ready
-            </button>
-          )}
-          {order.status === 'ready' && (
-            <button
-              onClick={() => updateOrderStatus(order.id, 'served')}
-              className="w-full bg-neutral-900 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-neutral-800 transition-colors flex items-center justify-center space-x-2"
+              onClick={() => updateOrderStatus(order.id, 'completed')}
+              className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors flex items-center justify-center space-x-2"
             >
               <Check className="h-4 w-4" />
-              <span>Mark Served</span>
+              <span>Complete Order</span>
             </button>
-          )}
-          {order.status === 'served' && (
-            <div className="w-full text-center py-2 px-4 text-sm text-neutral-500 font-medium">
-              Order Served
-            </div>
-          )}
-          
-          {/* Individual Item Actions */}
-          {order.status === 'in_progress' && (
-            <div className="space-y-1">
-              {order.items.map((item) => (
-                <div key={item.id} className="flex items-center justify-between text-xs">
-                  <span className="text-neutral-600">{item.name}</span>
-                  <div className="flex space-x-1">
-                    {item.status === 'queued' && (
-                      <button
-                        onClick={() => updateOrderItemStatus(order.id, item.id, 'prepping')}
-                        className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
-                      >
-                        Start
-                      </button>
-                    )}
-                    {item.status === 'prepping' && (
-                      <button
-                        onClick={() => updateOrderItemStatus(order.id, item.id, 'passed')}
-                        className="px-2 py-1 bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
-                      >
-                        Pass
-                      </button>
-                    )}
-                    {item.status === 'passed' && (
-                      <button
-                        onClick={() => updateOrderItemStatus(order.id, item.id, 'served')}
-                        className="px-2 py-1 bg-green-100 text-green-800 rounded hover:bg-green-200"
-                      >
-                        Serve
-                      </button>
-                    )}
-                  </div>
+                  )}
+                  
+                  {/* Individual Item Actions */}
+                  {order.status === 'in_progress' && (
+                    <div className="space-y-1">
+                      {order.items.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between text-xs">
+                          <span className="text-neutral-600">{item.name}</span>
+                          <div className="flex space-x-1">
+                            {item.status === 'queued' && (
+                              <button
+                                onClick={() => updateOrderItemStatus(order.id, item.id, 'prepping')}
+                                className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
+                              >
+                                Start
+                              </button>
+                            )}
+                            {item.status === 'prepping' && (
+                              <button
+                                onClick={() => updateOrderItemStatus(order.id, item.id, 'passed')}
+                                className="px-2 py-1 bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
+                              >
+                                Pass
+                              </button>
+                            )}
+                            {item.status === 'passed' && (
+                              <button
+                                onClick={() => updateOrderItemStatus(order.id, item.id, 'served')}
+                                className="px-2 py-1 bg-green-100 text-green-800 rounded hover:bg-green-200"
+                              >
+                                Serve
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+              </div>
     </>
   );
 
@@ -493,15 +582,23 @@ export default function KitchenDisplay() {
             {order.status === 'open' ? 'New' : 
              order.status === 'in_progress' ? 'Active' :
              order.status === 'ready' ? 'Ready' : 
-             order.status === 'served' ? 'Served' : 'Cancelled'}
+             order.status === 'served' ? 'Served' : 
+             order.status === 'completed' ? 'Done' : 'Cancelled'}
           </span>
         </div>
         <div className="flex items-center justify-between text-xs text-neutral-600">
           <span>T{order.tableNumber}</span>
-          <span className="flex items-center">
-            <Clock className="h-3 w-3 mr-0.5" />
-            {order.timestamp}
-          </span>
+          <div className="flex flex-col items-end">
+            <span className="flex items-center">
+              <Clock className="h-3 w-3 mr-0.5" />
+              {order.timestamp}
+            </span>
+            {order.startedAt && (
+              <span className="text-xs font-medium text-blue-600">
+                {getElapsedTime(order.startedAt, order.completedAt)}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -541,14 +638,6 @@ export default function KitchenDisplay() {
             <span>View</span>
           </button>
           
-          {order.status === 'open' && (
-            <button
-              onClick={() => updateOrderStatus(order.id, 'in_progress')}
-              className="w-full bg-neutral-900 text-white py-1 px-2 rounded text-xs font-medium hover:bg-neutral-800 transition-colors"
-            >
-              Start
-            </button>
-          )}
           {order.status === 'in_progress' && (
             <button
               onClick={() => updateOrderStatus(order.id, 'ready')}
@@ -564,6 +653,15 @@ export default function KitchenDisplay() {
             >
               <Check className="h-3 w-3" />
               <span>Serve</span>
+            </button>
+          )}
+          {order.status === 'served' && (
+            <button
+              onClick={() => updateOrderStatus(order.id, 'completed')}
+              className="w-full bg-purple-600 text-white py-1 px-2 rounded text-xs font-medium hover:bg-purple-700 transition-colors flex items-center justify-center space-x-1"
+            >
+              <Check className="h-3 w-3" />
+              <span>Complete</span>
             </button>
           )}
         </div>
@@ -759,14 +857,14 @@ export default function KitchenDisplay() {
                       <div className="flex-1 text-center py-4">
                         <div className="text-neutral-400 mb-2">
                           <ChefHat className="h-6 w-6 mx-auto" />
-                        </div>
+            </div>
                         <h3 className="text-xs font-semibold text-neutral-900 mb-1">No Orders Found</h3>
                         <p className="text-xs text-neutral-600">
-                          {activeFilter === 'all' 
-                            ? "No orders in the system yet."
-                            : `No orders with status "${activeFilter}" found.`
-                          }
-                        </p>
+              {activeFilter === 'all' 
+                ? "No orders in the system yet."
+                : `No orders with status "${activeFilter}" found.`
+              }
+            </p>
                       </div>
                     )}
                   </div>
