@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { Clock, Plus, Check, Utensils, ChefHat, Loader2, Eye } from 'lucide-react';
+import { Clock, Plus, Check, Utensils, ChefHat, Loader2, Eye, Brain, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { GetOrdersResponse, UpdateOrderItemStatusRequest, UpdateOrderItemStatusResponse } from '@shared/api';
 import OrderDetailsModal from '@/components/OrderDetailsModal';
@@ -225,8 +225,354 @@ export default function KitchenDisplay() {
     return orders.filter(order => order.status === 'open' || order.status === 'in_progress').length;
   };
 
+  // Helper function to get all food items from orders for AI queue
+  const getAllFoodItems = () => {
+    const allItems: Array<{
+      orderId: string;
+      itemId: string;
+      name: string;
+      qty: number;
+      note?: string;
+      status: OrderItem['status'];
+      predicted_prep_minutes?: number;
+      order: Order;
+    }> = [];
+
+    getFilteredOrders().forEach(order => {
+      order.items.forEach(item => {
+        if (item.status === 'queued' || item.status === 'prepping') {
+          allItems.push({
+            orderId: order.id,
+            itemId: item.id,
+            name: item.name,
+            qty: item.qty,
+            note: item.note,
+            status: item.status,
+            predicted_prep_minutes: item.predicted_prep_minutes,
+            order: order
+          });
+        }
+      });
+    });
+
+    // Sort by predicted prep time (shortest first) for AI efficiency
+    return allItems.sort((a, b) => {
+      const aTime = a.predicted_prep_minutes || 999;
+      const bTime = b.predicted_prep_minutes || 999;
+      return aTime - bTime;
+    });
+  };
+
+  const renderOrderCard = (order: Order) => (
+    <>
+      {/* Order Header */}
+      <div className="bg-neutral-50 px-4 py-3 border-b border-neutral-200">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <span className="text-lg font-bold text-neutral-900">#{order.id}</span>
+            <span className="text-sm text-neutral-600">Table {order.tableNumber}</span>
+            <span className="flex items-center text-sm text-neutral-500">
+              <Clock className="h-4 w-4 mr-1" />
+              {order.timestamp}
+            </span>
+          </div>
+          <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)} ${getStatusTextColor(order.status)}`}>
+            {order.status === 'open' ? 'New Order' : 
+             order.status === 'in_progress' ? 'In Progress' :
+             order.status === 'ready' ? 'Ready' : 
+             order.status === 'served' ? 'Served' : 'Cancelled'}
+          </span>
+        </div>
+        <div className="mt-1">
+          <span className="text-sm text-neutral-600">{order.customerName}</span>
+        </div>
+      </div>
+
+      {/* Order Items */}
+      <div className="p-4">
+        <div className="space-y-2 mb-4">
+          {order.items.map((item, index) => (
+            <div key={item.id} className="flex items-start space-x-2">
+              <span className="flex-shrink-0 w-6 h-6 bg-neutral-900 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                {index + 1}
+              </span>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <div className="font-medium text-neutral-900">
+                    {item.name} {item.qty > 1 && `(x${item.qty})`}
+                  </div>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getItemStatusColor(item.status)}`}>
+                    {item.status}
+                  </span>
+                </div>
+                {item.note && (
+                  <div className="text-sm text-neutral-600 italic">Note: {item.note}</div>
+                )}
+                {item.predicted_prep_minutes && (
+                  <div className="text-xs text-neutral-500">
+                    Est. {item.predicted_prep_minutes} min
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {order.specialRequests && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+            <div className="text-sm font-medium text-amber-800 mb-1">Special Requests:</div>
+            <div className="text-sm text-amber-700">{order.specialRequests}</div>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+          <div className="flex space-x-2 mb-2">
+            <button
+              onClick={() => openOrderModal(order)}
+              className="flex-1 bg-neutral-100 text-neutral-700 py-2 px-4 rounded-lg text-sm font-medium hover:bg-neutral-200 transition-colors flex items-center justify-center space-x-1"
+            >
+              <Eye className="h-4 w-4" />
+              <span>View Details</span>
+            </button>
+          </div>
+          
+          {order.status === 'open' && (
+            <button
+              onClick={() => updateOrderStatus(order.id, 'in_progress')}
+              className="w-full bg-neutral-900 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-neutral-800 transition-colors"
+            >
+              Start Order
+            </button>
+          )}
+          {order.status === 'in_progress' && (
+            <button
+              onClick={() => updateOrderStatus(order.id, 'ready')}
+              className="w-full bg-green-600 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+            >
+              Mark Ready
+            </button>
+          )}
+          {order.status === 'ready' && (
+            <button
+              onClick={() => updateOrderStatus(order.id, 'served')}
+              className="w-full bg-neutral-900 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-neutral-800 transition-colors flex items-center justify-center space-x-2"
+            >
+              <Check className="h-4 w-4" />
+              <span>Mark Served</span>
+            </button>
+          )}
+          {order.status === 'served' && (
+            <div className="w-full text-center py-2 px-4 text-sm text-neutral-500 font-medium">
+              Order Served
+            </div>
+          )}
+          
+          {/* Individual Item Actions */}
+          {order.status === 'in_progress' && (
+            <div className="space-y-1">
+              {order.items.map((item) => (
+                <div key={item.id} className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-600">{item.name}</span>
+                  <div className="flex space-x-1">
+                    {item.status === 'queued' && (
+                      <button
+                        onClick={() => updateOrderItemStatus(order.id, item.id, 'prepping')}
+                        className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
+                      >
+                        Start
+                      </button>
+                    )}
+                    {item.status === 'prepping' && (
+                      <button
+                        onClick={() => updateOrderItemStatus(order.id, item.id, 'passed')}
+                        className="px-2 py-1 bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
+                      >
+                        Pass
+                      </button>
+                    )}
+                    {item.status === 'passed' && (
+                      <button
+                        onClick={() => updateOrderItemStatus(order.id, item.id, 'served')}
+                        className="px-2 py-1 bg-green-100 text-green-800 rounded hover:bg-green-200"
+                      >
+                        Serve
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
+  // Render compact food item card for AI Smart Queue
+  const renderCompactFoodItemCard = (foodItem: any, priority: number) => (
+    <>
+      {/* Priority Badge */}
+      <div className="bg-gradient-to-r from-purple-500 to-blue-500 px-2 py-1.5 text-white">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-1.5">
+            <span className="bg-white text-purple-600 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold">
+              {priority}
+            </span>
+            <span className="text-xs font-semibold">#{foodItem.orderId}</span>
+          </div>
+          <span className="text-xs bg-white bg-opacity-20 px-1.5 py-0.5 rounded-full">
+            T{foodItem.order.tableNumber}
+          </span>
+        </div>
+      </div>
+
+      {/* Food Item Details */}
+      <div className="p-2">
+        <div className="text-center mb-2">
+          <h3 className="text-sm font-bold text-neutral-900 mb-1">{foodItem.name}</h3>
+          <div className="flex items-center justify-center space-x-1.5">
+            <span className="text-lg font-bold text-purple-600">x{foodItem.qty}</span>
+            {foodItem.predicted_prep_minutes && (
+              <span className="text-xs bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded-full">
+                {foodItem.predicted_prep_minutes}m
+              </span>
+            )}
+          </div>
+        </div>
+
+        {foodItem.note && (
+          <div className="bg-amber-50 border border-amber-200 rounded p-1.5 mb-2">
+            <div className="text-xs text-amber-800 font-medium mb-0.5">Note:</div>
+            <div className="text-xs text-amber-700 truncate">{foodItem.note}</div>
+          </div>
+        )}
+
+        {/* Status and Actions */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${getItemStatusColor(foodItem.status)}`}>
+              {foodItem.status === 'queued' ? 'Q' : 'P'}
+            </span>
+            <span className="text-xs text-neutral-500">
+              {formatTimeAgo(foodItem.order.timestamp)}
+            </span>
+          </div>
+          
+          <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
+            {foodItem.status === 'queued' && (
+              <button
+                onClick={() => updateOrderItemStatus(foodItem.orderId, foodItem.itemId, 'prepping')}
+                className="w-full bg-purple-600 text-white py-1.5 px-2 rounded text-xs font-medium hover:bg-purple-700 transition-colors"
+              >
+                Start
+              </button>
+            )}
+            {foodItem.status === 'prepping' && (
+              <button
+                onClick={() => updateOrderItemStatus(foodItem.orderId, foodItem.itemId, 'passed')}
+                className="w-full bg-blue-600 text-white py-1.5 px-2 rounded text-xs font-medium hover:bg-blue-700 transition-colors"
+              >
+                Done
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
+  // Render mini order card for Traditional Queue
+  const renderMiniOrderCard = (order: Order) => (
+    <>
+      {/* Order Header */}
+      <div className="bg-neutral-50 px-2 py-1.5 border-b border-neutral-200">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs font-bold text-neutral-900">#{order.id}</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.status)} ${getStatusTextColor(order.status)}`}>
+            {order.status === 'open' ? 'New' : 
+             order.status === 'in_progress' ? 'Active' :
+             order.status === 'ready' ? 'Ready' : 
+             order.status === 'served' ? 'Served' : 'Cancelled'}
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-xs text-neutral-600">
+          <span>T{order.tableNumber}</span>
+          <span className="flex items-center">
+            <Clock className="h-3 w-3 mr-0.5" />
+            {order.timestamp}
+          </span>
+        </div>
+      </div>
+
+      {/* Order Items - Mini */}
+      <div className="p-2">
+        <div className="space-y-1 mb-2">
+          {order.items.slice(0, 2).map((item, index) => (
+            <div key={item.id} className="flex items-center justify-between text-xs">
+              <div className="flex items-center space-x-1">
+                <span className="w-3 h-3 bg-neutral-900 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                  {index + 1}
+                </span>
+                <span className="font-medium truncate">{item.name}</span>
+                {item.qty > 1 && <span className="text-neutral-500">x{item.qty}</span>}
+              </div>
+              <span className={`px-1 py-0.5 rounded-full text-xs font-medium ${getItemStatusColor(item.status)}`}>
+                {item.status === 'queued' ? 'Q' : 
+                 item.status === 'prepping' ? 'P' :
+                 item.status === 'passed' ? 'D' : 'S'}
+              </span>
+            </div>
+          ))}
+          {order.items.length > 2 && (
+            <div className="text-xs text-neutral-500 text-center">
+              +{order.items.length - 2} more
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => openOrderModal(order)}
+            className="w-full bg-neutral-100 text-neutral-700 py-1 px-2 rounded text-xs font-medium hover:bg-neutral-200 transition-colors flex items-center justify-center space-x-1"
+          >
+            <Eye className="h-3 w-3" />
+            <span>View</span>
+          </button>
+          
+          {order.status === 'open' && (
+            <button
+              onClick={() => updateOrderStatus(order.id, 'in_progress')}
+              className="w-full bg-neutral-900 text-white py-1 px-2 rounded text-xs font-medium hover:bg-neutral-800 transition-colors"
+            >
+              Start
+            </button>
+          )}
+          {order.status === 'in_progress' && (
+            <button
+              onClick={() => updateOrderStatus(order.id, 'ready')}
+              className="w-full bg-green-600 text-white py-1 px-2 rounded text-xs font-medium hover:bg-green-700 transition-colors"
+            >
+              Ready
+            </button>
+          )}
+          {order.status === 'ready' && (
+            <button
+              onClick={() => updateOrderStatus(order.id, 'served')}
+              className="w-full bg-neutral-900 text-white py-1 px-2 rounded text-xs font-medium hover:bg-neutral-800 transition-colors flex items-center justify-center space-x-1"
+            >
+              <Check className="h-3 w-3" />
+              <span>Serve</span>
+            </button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
   return (
-    <div className="min-h-screen bg-neutral-100">
+    <div className="min-h-screen bg-neutral-100 flex flex-col">
       {/* Header */}
       <header className="bg-white border-b border-neutral-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -250,62 +596,63 @@ export default function KitchenDisplay() {
                 </Link>
               </nav>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="text-sm text-neutral-600">
-                Manage and track restaurant orders in real-time
+              <div className="flex items-center space-x-4">
+                <div className="text-sm text-neutral-600">
+                  Manage and track restaurant orders in real-time
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-medium text-neutral-700">Active Orders:</span>
+                  <span className="bg-status-new text-white px-2 py-1 rounded text-sm font-bold">
+                    {getActiveOrdersCount()}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <span className="text-sm font-medium text-neutral-700">Active Orders:</span>
-                <span className="bg-status-new text-white px-2 py-1 rounded text-sm font-bold">
-                  {getActiveOrdersCount()}
-                </span>
-              </div>
-              <button className="bg-neutral-900 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-neutral-800 transition-colors">
-                <Plus className="h-4 w-4" />
-                <span className="text-sm font-medium">Add Test Order</span>
-              </button>
-            </div>
           </div>
         </div>
       </header>
 
-      {/* Status Filter */}
+      {/* Queue Type Selector */}
       <div className="bg-white border-b border-neutral-200 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex space-x-1 py-4">
-            {[
-              { key: 'all', label: 'All Orders' },
-              { key: 'in_progress', label: 'In Progress' },
-              { key: 'ready', label: 'Ready' },
-              { key: 'served', label: 'Served' },
-              { key: 'cancelled', label: 'Cancelled' }
-            ].map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setActiveFilter(key as any)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2 ${
-                  activeFilter === key
-                    ? 'bg-neutral-900 text-white'
-                    : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-                }`}
-              >
-                <span>{label}</span>
-                <span className={`px-2 py-0.5 rounded-full text-xs ${
-                  activeFilter === key ? 'bg-white text-neutral-900' : 'bg-white text-neutral-600'
-                }`}>
-                  {getStatusCount(key as any)}
-                </span>
-              </button>
-            ))}
-          </nav>
+          <div className="flex items-center justify-between py-4">
+            <div className="flex items-center space-x-4">
+              <h2 className="text-lg font-semibold text-neutral-900">Kitchen Queues</h2>
+              <div className="flex space-x-1">
+                {[
+                  { key: 'all', label: 'All Orders' },
+                  { key: 'in_progress', label: 'In Progress' },
+                  { key: 'ready', label: 'Ready' },
+                  { key: 'served', label: 'Served' },
+                  { key: 'cancelled', label: 'Cancelled' }
+                ].map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => setActiveFilter(key as any)}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2 ${
+                      activeFilter === key
+                        ? 'bg-neutral-900 text-white'
+                        : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                    }`}
+                  >
+                    <span>{label}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-xs ${
+                      activeFilter === key ? 'bg-white text-neutral-900' : 'bg-white text-neutral-600'
+                    }`}>
+                      {getStatusCount(key as any)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Orders Grid */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      {/* Main Content with Two Queue Sections */}
+      <main className="flex-1 bg-neutral-100" style={{ height: 'calc(100vh - 140px)' }}>
         {/* Error Message */}
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mx-4 mt-4">
             <div className="flex items-center">
               <div className="text-red-600 mr-3">
                 <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
@@ -327,169 +674,111 @@ export default function KitchenDisplay() {
           </div>
         )}
 
-        {/* Orders Grid */}
+        {/* Two Queue Sections - Top and Bottom */}
         {!loading && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-          {getFilteredOrders().map((order) => (
-            <div key={order.id} className="bg-white rounded-lg border border-neutral-200 overflow-hidden hover:shadow-md transition-shadow cursor-pointer" onClick={() => openOrderModal(order)}>
-              {/* Order Header */}
-              <div className="bg-neutral-50 px-4 py-3 border-b border-neutral-200">
+          <div className="flex flex-col gap-3 p-3 h-full">
+            {/* AI Smart Queue Section - Top Half */}
+            <div className="flex-1 bg-white rounded-lg border border-neutral-200 overflow-hidden">
+              <div className="bg-gradient-to-r from-purple-50 to-blue-50 px-4 py-2 border-b border-neutral-200">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <span className="text-lg font-bold text-neutral-900">#{order.id}</span>
-                    <span className="text-sm text-neutral-600">Table {order.tableNumber}</span>
-                    <span className="flex items-center text-sm text-neutral-500">
-                      <Clock className="h-4 w-4 mr-1" />
-                      {order.timestamp}
+                  <div className="flex items-center space-x-2">
+                    <Brain className="h-4 w-4 text-purple-600" />
+                    <div>
+                      <h3 className="text-sm font-semibold text-neutral-900">AI Smart Queue</h3>
+                      <p className="text-xs text-neutral-600">Cook these items first for efficiency</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs font-medium text-neutral-700">Items:</span>
+                    <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-bold">
+                      {getAllFoodItems().length}
                     </span>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)} ${getStatusTextColor(order.status)}`}>
-                    {order.status === 'open' ? 'New Order' : 
-                     order.status === 'in_progress' ? 'In Progress' :
-                     order.status === 'ready' ? 'Ready' : 
-                     order.status === 'served' ? 'Served' : 'Cancelled'}
-                  </span>
-                </div>
-                <div className="mt-1">
-                  <span className="text-sm text-neutral-600">{order.customerName}</span>
                 </div>
               </div>
-
-              {/* Order Items */}
-              <div className="p-4">
-                <div className="space-y-2 mb-4">
-                  {order.items.map((item, index) => (
-                    <div key={item.id} className="flex items-start space-x-2">
-                      <span className="flex-shrink-0 w-6 h-6 bg-neutral-900 text-white text-xs rounded-full flex items-center justify-center font-medium">
-                        {index + 1}
-                      </span>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between">
-                          <div className="font-medium text-neutral-900">
-                            {item.name} {item.qty > 1 && `(x${item.qty})`}
-                          </div>
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getItemStatusColor(item.status)}`}>
-                            {item.status}
-                          </span>
+              
+              <div className="p-2 h-full">
+                <div className="relative h-full">
+                  <div className="flex space-x-2 overflow-x-auto pb-1 custom-scrollbar horizontal-scroll h-full">
+                    {getAllFoodItems().length > 0 ? (
+                      getAllFoodItems().map((foodItem, index) => (
+                        <div key={`${foodItem.orderId}-${foodItem.itemId}`} className="flex-shrink-0 w-80 bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg border border-purple-200 overflow-hidden hover:shadow-md transition-all duration-200 cursor-pointer transform hover:-translate-y-0.5" onClick={() => openOrderModal(foodItem.order)}>
+                          {renderCompactFoodItemCard(foodItem, index + 1)}
                         </div>
-                        {item.note && (
-                          <div className="text-sm text-neutral-600 italic">Note: {item.note}</div>
-                        )}
-                        {item.predicted_prep_minutes && (
-                          <div className="text-xs text-neutral-500">
-                            Est. {item.predicted_prep_minutes} min
-                          </div>
-                        )}
+                      ))
+                    ) : (
+                      <div className="flex-1 text-center py-4">
+                        <div className="text-neutral-400 mb-2">
+                          <Brain className="h-6 w-6 mx-auto" />
+                        </div>
+                        <h3 className="text-xs font-semibold text-neutral-900 mb-1">No Items to Cook</h3>
+                        <p className="text-xs text-neutral-600">AI queue is ready for new orders</p>
                       </div>
-                    </div>
-                  ))}
-                </div>
-
-                {order.specialRequests && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-                    <div className="text-sm font-medium text-amber-800 mb-1">Special Requests:</div>
-                    <div className="text-sm text-amber-700">{order.specialRequests}</div>
+                    )}
                   </div>
-                )}
-
-                {/* Action Buttons */}
-                <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex space-x-2 mb-2">
-                    <button
-                      onClick={() => openOrderModal(order)}
-                      className="flex-1 bg-neutral-100 text-neutral-700 py-2 px-4 rounded-lg text-sm font-medium hover:bg-neutral-200 transition-colors flex items-center justify-center space-x-1"
-                    >
-                      <Eye className="h-4 w-4" />
-                      <span>View Details</span>
-                    </button>
-                  </div>
-                  
-                  {order.status === 'open' && (
-                    <button
-                      onClick={() => updateOrderStatus(order.id, 'in_progress')}
-                      className="w-full bg-neutral-900 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-neutral-800 transition-colors"
-                    >
-                      Start Order
-                    </button>
-                  )}
-                  {order.status === 'in_progress' && (
-                    <button
-                      onClick={() => updateOrderStatus(order.id, 'ready')}
-                      className="w-full bg-green-600 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
-                    >
-                      Mark Ready
-                    </button>
-                  )}
-                  {order.status === 'ready' && (
-                    <button
-                      onClick={() => updateOrderStatus(order.id, 'served')}
-                      className="w-full bg-neutral-900 text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-neutral-800 transition-colors flex items-center justify-center space-x-2"
-                    >
-                      <Check className="h-4 w-4" />
-                      <span>Mark Served</span>
-                    </button>
-                  )}
-                  {order.status === 'served' && (
-                    <div className="w-full text-center py-2 px-4 text-sm text-neutral-500 font-medium">
-                      Order Served
-                    </div>
-                  )}
-                  
-                  {/* Individual Item Actions */}
-                  {order.status === 'in_progress' && (
-                    <div className="space-y-1">
-                      {order.items.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between text-xs">
-                          <span className="text-neutral-600">{item.name}</span>
-                          <div className="flex space-x-1">
-                            {item.status === 'queued' && (
-                              <button
-                                onClick={() => updateOrderItemStatus(order.id, item.id, 'prepping')}
-                                className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
-                              >
-                                Start
-                              </button>
-                            )}
-                            {item.status === 'prepping' && (
-                              <button
-                                onClick={() => updateOrderItemStatus(order.id, item.id, 'passed')}
-                                className="px-2 py-1 bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
-                              >
-                                Pass
-                              </button>
-                            )}
-                            {item.status === 'passed' && (
-                              <button
-                                onClick={() => updateOrderItemStatus(order.id, item.id, 'served')}
-                                className="px-2 py-1 bg-green-100 text-green-800 rounded hover:bg-green-200"
-                              >
-                                Serve
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                  {/* Scroll indicator */}
+                  {getAllFoodItems().length > 4 && (
+                    <div className="absolute right-0 top-1/2 transform -translate-y-1/2 bg-white shadow-md rounded-full p-1 border border-neutral-200">
+                      <ArrowRight className="h-3 w-3 text-neutral-600" />
                     </div>
                   )}
                 </div>
               </div>
             </div>
-          ))}
-          </div>
-        )}
 
-        {!loading && getFilteredOrders().length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-neutral-400 mb-4">
-              <Clock className="h-12 w-12 mx-auto" />
+            {/* Traditional Queue Section - Bottom Half */}
+            <div className="flex-1 bg-white rounded-lg border border-neutral-200 overflow-hidden">
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-4 py-2 border-b border-neutral-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <ChefHat className="h-4 w-4 text-green-600" />
+                    <div>
+                      <h3 className="text-sm font-semibold text-neutral-900">Traditional Queue</h3>
+                      <p className="text-xs text-neutral-600">Complete orders by table</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs font-medium text-neutral-700">Orders:</span>
+                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-bold">
+                      {getFilteredOrders().length}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-2 h-full">
+                <div className="relative h-full">
+                  <div className="flex space-x-2 overflow-x-auto pb-1 custom-scrollbar horizontal-scroll h-full">
+                    {getFilteredOrders().length > 0 ? (
+                      getFilteredOrders().map((order) => (
+                        <div key={order.id} className="flex-shrink-0 w-80 bg-white rounded-lg border border-neutral-200 overflow-hidden hover:shadow-md transition-all duration-200 cursor-pointer transform hover:-translate-y-0.5" onClick={() => openOrderModal(order)}>
+                          {renderMiniOrderCard(order)}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex-1 text-center py-4">
+                        <div className="text-neutral-400 mb-2">
+                          <ChefHat className="h-6 w-6 mx-auto" />
+                        </div>
+                        <h3 className="text-xs font-semibold text-neutral-900 mb-1">No Orders Found</h3>
+                        <p className="text-xs text-neutral-600">
+                          {activeFilter === 'all' 
+                            ? "No orders in the system yet."
+                            : `No orders with status "${activeFilter}" found.`
+                          }
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  {/* Scroll indicator */}
+                  {getFilteredOrders().length > 4 && (
+                    <div className="absolute right-0 top-1/2 transform -translate-y-1/2 bg-white shadow-md rounded-full p-1 border border-neutral-200">
+                      <ArrowRight className="h-3 w-3 text-neutral-600" />
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-            <h3 className="text-lg font-semibold text-neutral-900 mb-2">No Orders Found</h3>
-            <p className="text-neutral-600">
-              {activeFilter === 'all' 
-                ? "No orders in the system yet."
-                : `No orders with status "${activeFilter}" found.`
-              }
-            </p>
           </div>
         )}
       </main>
