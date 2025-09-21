@@ -59,6 +59,7 @@ export default function KitchenManager() {
   const [isSavingAll, setIsSavingAll] = useState(false);
   const [modifiedItems, setModifiedItems] = useState<Set<string>>(new Set());
   const [originalQuantities, setOriginalQuantities] = useState<Map<string, number>>(new Map());
+  const [restockBadgeCount, setRestockBadgeCount] = useState<number>(0);
 
   // Fetch KSM data only
   useEffect(() => {
@@ -74,7 +75,20 @@ export default function KitchenManager() {
         }
 
         const ksmData = await ksmResponse.json();
-        setInventory((ksmData as GetKSMInventoryResponse).items || []);
+        const items = (ksmData as GetKSMInventoryResponse).items || [];
+        setInventory(items);
+
+        // Preload shopping list count for manager badge
+        try {
+          const slRes = await fetch('/api/shopping-list/monthly');
+          if (slRes.ok) {
+            const sl = await slRes.json();
+            const urgent = (sl.items as AIPrepItem[] | undefined)?.filter(i => i.urgency === 'high' || i.urgency === 'critical').length ?? 0;
+            setRestockBadgeCount(urgent);
+          }
+        } catch {
+          // ignore
+        }
       } catch (err) {
         console.error('Error fetching KSM data:', err);
         setError('Failed to load KSM data.');
@@ -205,79 +219,17 @@ export default function KitchenManager() {
     setTempQuantity(Math.max(0, numValue));
   };
 
-  const handleAIPrep = () => {
-    // Mock AI Prep data - in real implementation, this would come from AI forecasting
-    const mockAIPrepItems: AIPrepItem[] = [
-      {
-        id: '1',
-        name: 'Beef Patty',
-        category: 'Meat',
-        currentStock: 0,
-        unit: 'kg',
-        recommendedQty: 5,
-        urgency: 'critical',
-        reason: 'Out of stock - urgent for burger orders',
-        estimatedCost: 125.00
-      },
-      {
-        id: '2',
-        name: 'Burger Bun',
-        category: 'Bakery',
-        currentStock: 20,
-        unit: 'pack',
-        recommendedQty: 8,
-        urgency: 'high',
-        reason: 'High demand predicted for weekend rush',
-        estimatedCost: 24.00
-      },
-      {
-        id: '3',
-        name: 'Cheddar Cheese',
-        category: 'Dairy',
-        currentStock: 1,
-        unit: 'kg',
-        recommendedQty: 3,
-        urgency: 'medium',
-        reason: 'Running low, weekend orders expected',
-        estimatedCost: 35.00
-      },
-      {
-        id: '4',
-        name: 'Cooking Oil',
-        category: 'Pantry',
-        currentStock: 1,
-        unit: 'L',
-        recommendedQty: 5,
-        urgency: 'low',
-        reason: 'Prevent stockout during busy period',
-        estimatedCost: 45.00
-      },
-      {
-        id: '5',
-        name: 'Lettuce',
-        category: 'Vegetables',
-        currentStock: 0,
-        unit: 'kg',
-        recommendedQty: 2,
-        urgency: 'critical',
-        reason: 'Fresh produce needed for salads',
-        estimatedCost: 15.00
-      },
-      {
-        id: '6',
-        name: 'Tomatoes',
-        category: 'Vegetables',
-        currentStock: 0.5,
-        unit: 'kg',
-        recommendedQty: 3,
-        urgency: 'high',
-        reason: 'Essential for burgers and salads',
-        estimatedCost: 18.00
-      }
-    ];
-    
-    setAiPrepItems(mockAIPrepItems);
-    setShowAIPrepModal(true);
+  const handleAIPrep = async () => {
+    try {
+      const res = await fetch('/api/shopping-list/monthly');
+      if (!res.ok) throw new Error('Failed to generate shopping list');
+      const data = await res.json();
+      setAiPrepItems((data.items || []).slice(0, 100));
+      setShowAIPrepModal(true);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to generate shopping list.');
+    }
   };
 
   const getUrgencyColor = (urgency: string) => {
@@ -452,6 +404,9 @@ export default function KitchenManager() {
               >
                 <Brain className="h-4 w-4" />
                 <span className="text-sm font-medium">AI Prep Button</span>
+                {restockBadgeCount > 0 && (
+                  <span className="ml-2 text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">{restockBadgeCount}</span>
+                )}
               </button>
             </div>
           </div>

@@ -450,6 +450,88 @@ class KitchenTools:
             {"po_id": po_id, "po_number": po_number, "lines": line_payload},
         )
 
+    @tool(context=True)
+    def monthly_shopping_list(self, days: int = 30, tool_context: ToolContext | None = None) -> dict:
+        """Compute monthly shopping list from recent order history (legacy schema).
+
+        This tool reads from legacy tables `orders`, `orderitems`, `menuitemingredients`, and `ingredients`
+        to estimate the last-N-day ingredient usage and suggest recommended buy quantities.
+
+        Args:
+            days: Lookback window in days (default 30).
+        """
+        LOGGER.info("Generating monthly shopping list | days=%s", days)
+        rows = self._db.fetch_all(
+            """
+            WITH month_orders AS (
+                SELECT oi.itemid   AS item_id,
+                       SUM(oi.quantity) AS qty
+                FROM orderitems oi
+                JOIN orders o ON o.orderid = oi.orderid
+                WHERE o.orderdate >= (now() - make_interval(days => %s))
+                GROUP BY oi.itemid
+            ),
+            ingredient_usage AS (
+                SELECT mii.ingredientid AS ingredient_id,
+                       SUM(mo.qty * mii.quantityneeded) AS monthly_usage
+                FROM month_orders mo
+                JOIN menuitemingredients mii ON mii.itemid = mo.item_id
+                GROUP BY mii.ingredientid
+            )
+            SELECT i.ingredientid            AS id,
+                   i.ingredientname          AS name,
+                   i."Category"             AS category,
+                   i.unit                    AS unit,
+                   i.stockquantity           AS current_stock,
+                   COALESCE(u.monthly_usage, 0) AS monthly_usage,
+                   i."LowThreshold"         AS low_threshold
+            FROM ingredients i
+            LEFT JOIN ingredient_usage u ON u.ingredient_id = i.ingredientid
+            ORDER BY u.monthly_usage DESC NULLS LAST
+            """,
+            (days,),
+        )
+
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            name = row.get("name")
+            unit = row.get("unit") or "ea"
+            current_stock = float(row.get("current_stock") or 0)
+            monthly_usage = float(row.get("monthly_usage") or 0)
+            low = float(row.get("low_threshold") or 0)
+            recommended = max(monthly_usage - current_stock, 0)
+
+            urgency = "low"
+            if current_stock <= 0:
+                urgency = "critical"
+            elif current_stock < low:
+                urgency = "high"
+            elif recommended > 0:
+                urgency = "medium"
+
+            reason_parts: list[str] = []
+            reason_parts.append(f"Projected {days}d usage {monthly_usage:.2f} {unit}")
+            reason_parts.append(f"On hand {current_stock:.2f} {unit}")
+            if low > 0:
+                reason_parts.append(f"Par {low:.2f} {unit}")
+
+            if recommended > 0:
+                items.append(
+                    {
+                        "id": str(row.get("id")),
+                        "name": name,
+                        "category": row.get("category") or "Uncategorized",
+                        "currentStock": current_stock,
+                        "unit": unit,
+                        "recommendedQty": float(f"{recommended:.2f}"),
+                        "urgency": urgency,
+                        "reason": " · ".join(reason_parts),
+                        "estimatedCost": 0.0,
+                    }
+                )
+
+        return _success({"items": items, "days": days})
+
     # --- Waste & substitution tools --------------------------------------------
 
     @tool(context=True)
