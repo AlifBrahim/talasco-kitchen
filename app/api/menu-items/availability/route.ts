@@ -105,7 +105,7 @@ export async function GET(_req: NextRequest) {
 }
 
 // Helper function to check if specific menu item is available
-export async function checkItemAvailability(itemId: number, requestedQuantity: number = 1) {
+async function checkItemAvailability(itemId: number, requestedQuantity: number = 1) {
   try {
     const recipeResult = await dbQuery(`
       SELECT 
