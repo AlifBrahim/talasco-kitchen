@@ -15,7 +15,9 @@ import {
   Brain,
   ShoppingCart,
   X,
-  CheckCircle
+  CheckCircle,
+  BarChart3,
+  PieChart
 } from 'lucide-react';
 import Link from 'next/link';
 import { GetKSMInventoryResponse } from '@shared/api';
@@ -44,6 +46,11 @@ interface AIPrepItem {
 
 export default function KitchenManager() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [showFinancialReport, setShowFinancialReport] = useState(false);
+  const [showInventoryReport, setShowInventoryReport] = useState(false);
+  const [financialReport, setFinancialReport] = useState<any | null>(null);
+  const [inventoryReport, setInventoryReport] = useState<any | null>(null);
+  const [reportLoading, setReportLoading] = useState<null | 'financial' | 'inventory'>(null);
   const [ksmSearch, setKsmSearch] = useState('');
   const [ksmCategory, setKsmCategory] = useState('All Categories');
   const [ksmStatus, setKsmStatus] = useState<'all' | 'in' | 'low' | 'out'>('all');
@@ -233,6 +240,38 @@ export default function KitchenManager() {
     }
   };
 
+  const openFinancialReport = async () => {
+    try {
+      setReportLoading('financial');
+      const res = await fetch('/api/reports/financial');
+      if (!res.ok) throw new Error('Failed to fetch financial report');
+      const data = await res.json();
+      setFinancialReport(data);
+      setShowFinancialReport(true);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to load financial report.');
+    } finally {
+      setReportLoading(null);
+    }
+  };
+
+  const openInventoryReport = async () => {
+    try {
+      setReportLoading('inventory');
+      const res = await fetch('/api/reports/inventory');
+      if (!res.ok) throw new Error('Failed to fetch inventory report');
+      const data = await res.json();
+      setInventoryReport(data);
+      setShowInventoryReport(true);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to load inventory report.');
+    } finally {
+      setReportLoading(null);
+    }
+  };
+
   const getUrgencyColor = (urgency: string) => {
     switch (urgency) {
       case 'critical': return 'bg-red-100 text-red-800 border-red-200';
@@ -415,26 +454,28 @@ export default function KitchenManager() {
   return (
     <div className="min-h-screen bg-neutral-50">
       {/* Header */}
-      <header className="bg-white border-b border-neutral-200">
+      <header className="bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70 border-b border-neutral-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-8">
-              <div className="flex items-center space-x-2">
-                <ChefHat className="h-6 w-6 text-neutral-800" />
-                <h1 className="text-xl font-semibold text-neutral-900">Kitchen Stock Management</h1>
-                <span className="text-sm text-neutral-500">Inventory Management</span>
+          <div className="flex items-center justify-between h-20">
+            <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-3">
+                <ChefHat className="h-8 w-8 text-neutral-900" />
+                <div>
+                  <h1 className="text-2xl font-semibold text-neutral-900 leading-tight">Kitchen Stock Management</h1>
+                  <p className="text-sm text-neutral-500">Inventory Management</p>
+                </div>
               </div>
-              <nav className="hidden md:flex items-center space-x-6">
+              <nav className="hidden md:flex items-center space-x-6 ml-8">
                 <Link
                   href="/"
-                  className="flex items-center space-x-1 text-sm text-neutral-600 hover:text-neutral-900 transition-colors"
+                  className="flex items-center space-x-2 text-sm text-neutral-600 hover:text-neutral-900 transition-colors"
                 >
                   <Utensils className="h-4 w-4" />
                   <span>Menu</span>
                 </Link>
                 <Link
                   href="/kitchen"
-                  className="flex items-center space-x-1 text-sm text-neutral-600 hover:text-neutral-900 transition-colors"
+                  className="flex items-center space-x-2 text-sm text-neutral-600 hover:text-neutral-900 transition-colors"
                 >
                   <Monitor className="h-4 w-4" />
                   <span>Kitchen Display</span>
@@ -442,24 +483,50 @@ export default function KitchenManager() {
               </nav>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-neutral-600">{ksmTotals.total} Items</span>
-              <span className="text-sm text-neutral-600">{ksmTotals.low} Low Stock</span>
+              {/* Manager Actions - Icon Buttons */}
+              <button
+                onClick={openFinancialReport}
+                title="Financial Report"
+                disabled={reportLoading === 'financial'}
+                className="h-10 w-10 rounded-full flex items-center justify-center bg-neutral-900 text-white hover:bg-neutral-800 transition-colors disabled:opacity-50"
+              >
+                <BarChart3 className="h-5 w-5" />
+              </button>
+              <button
+                onClick={openInventoryReport}
+                title="Inventory Report"
+                disabled={reportLoading === 'inventory'}
+                className="h-10 w-10 rounded-full flex items-center justify-center bg-neutral-100 text-neutral-900 hover:bg-neutral-200 border border-neutral-300 transition-colors disabled:opacity-50"
+              >
+                <PieChart className="h-5 w-5" />
+              </button>
+              <button 
+                onClick={handleAIPrep}
+                title="AI Prep Recommendations"
+                className="h-10 rounded-full px-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 transition-all shadow flex items-center"
+              >
+                <Brain className="h-4 w-4 mr-2" />
+                <span className="text-sm font-medium">AI Prep</span>
+                {restockBadgeCount > 0 && (
+                  <span className="ml-2 text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">{restockBadgeCount}</span>
+                )}
+              </button>
+
+              {/* Mini KPIs */}
+              <div className="text-right">
+                <div className="text-xs text-neutral-500">Items</div>
+                <div className="text-lg font-semibold text-neutral-900">{ksmTotals.total}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-neutral-500">Low Stock</div>
+                <div className="text-lg font-semibold text-yellow-600">{ksmTotals.low}</div>
+              </div>
               {hasUnsavedChanges && (
                 <div className="flex items-center space-x-2 text-orange-600">
                   <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
                   <span className="text-sm font-medium">Unsaved changes</span>
                 </div>
               )}
-              <button 
-                onClick={handleAIPrep}
-                className="bg-gradient-to-r from-purple-600 to-blue-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:from-purple-700 hover:to-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl"
-              >
-                <Brain className="h-4 w-4" />
-                <span className="text-sm font-medium">AI Prep Button</span>
-                {restockBadgeCount > 0 && (
-                  <span className="ml-2 text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">{restockBadgeCount}</span>
-                )}
-              </button>
             </div>
           </div>
         </div>
@@ -494,44 +561,44 @@ export default function KitchenManager() {
         {/* Kitchen Stock Management Content */}
         {!loading && (
           <div className="space-y-8">
-            {/* Top stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white rounded-lg border border-neutral-200 p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                    <p className="text-sm font-medium text-neutral-600">Total Items</p>
-                    <p className="text-3xl font-bold text-neutral-900">{ksmTotals.total}</p>
-                    <p className="text-xs text-neutral-500 mt-1">Items in inventory</p>
+            {/* KPI Deck */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="bg-white rounded-xl border border-neutral-200 p-8 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-neutral-500">Total Items</p>
+                    <p className="text-4xl font-bold text-neutral-900 mt-1">{ksmTotals.total}</p>
+                    <p className="text-sm text-neutral-500 mt-2">Items in inventory</p>
                   </div>
-                  <Package className="h-6 w-6 text-neutral-700" />
+                  <Package className="h-8 w-8 text-neutral-700" />
                 </div>
               </div>
-
-              <div className="bg-white rounded-lg border border-neutral-200 p-6">
+              <div className="bg-white rounded-xl border border-neutral-200 p-8 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-neutral-600">Low Stock</p>
-                    <p className="text-3xl font-bold text-yellow-600">{ksmTotals.low}</p>
-                    <p className="text-xs text-neutral-500 mt-1">Need restocking</p>
-                </div>
-                  <AlertTriangle className="h-6 w-6 text-yellow-600" />
+                    <p className="text-sm text-neutral-500">Low Stock</p>
+                    <p className="text-4xl font-bold text-yellow-600 mt-1">{ksmTotals.low}</p>
+                    <p className="text-sm text-neutral-500 mt-2">Need restocking</p>
+                  </div>
+                  <AlertTriangle className="h-8 w-8 text-yellow-600" />
                 </div>
               </div>
-
-              <div className="bg-white rounded-lg border border-neutral-200 p-6">
+              <div className="bg-white rounded-xl border border-neutral-200 p-8 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-neutral-600">Out of Stock</p>
-                    <p className="text-3xl font-bold text-red-600">{ksmTotals.out}</p>
-                    <p className="text-xs text-neutral-500 mt-1">Urgent restocking</p>
-                </div>
-                  <AlertTriangle className="h-6 w-6 text-red-600" />
+                    <p className="text-sm text-neutral-500">Out of Stock</p>
+                    <p className="text-4xl font-bold text-red-600 mt-1">{ksmTotals.out}</p>
+                    <p className="text-sm text-neutral-500 mt-2">Urgent restocking</p>
+                  </div>
+                  <AlertTriangle className="h-8 w-8 text-red-600" />
                 </div>
               </div>
             </div>
 
+            {/* Manager Actions moved to sticky header */}
+
             {/* Toolbar */}
-            <div className="bg-white rounded-lg border border-neutral-200 p-4">
+            <div className="bg-white rounded-xl border border-neutral-200 p-4">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <div className="relative">
@@ -873,6 +940,223 @@ export default function KitchenManager() {
                       </>
                     )}
                   </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Financial Report Modal */}
+      {showFinancialReport && financialReport && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden">
+            <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-neutral-900">Financial Report</h2>
+                <p className="text-sm text-neutral-500">Last {financialReport.rangeDays} days</p>
+              </div>
+              <button onClick={() => setShowFinancialReport(false)} className="text-neutral-600 hover:text-neutral-900">✕</button>
+            </div>
+            <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(90vh-64px)]">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                  <p className="text-sm text-neutral-500">Total Revenue</p>
+                  <p className="text-2xl font-bold">RM{Number(financialReport.totals.totalRevenue).toFixed(2)}</p>
+                </div>
+                <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                  <p className="text-sm text-neutral-500">Orders</p>
+                  <p className="text-2xl font-bold">{Number(financialReport.totals.orders)}</p>
+                </div>
+                <div className="bg-neutral-50 rounded-lg p-4 border border-neutral-200">
+                  <p className="text-sm text-neutral-500">Avg Order Value</p>
+                  <p className="text-2xl font-bold">RM{Number(financialReport.totals.averageOrderValue).toFixed(2)}</p>
+                </div>
+              </div>
+
+              {/* Revenue trend line chart */}
+              <div className="bg-white rounded-lg p-4 border border-neutral-200">
+                <p className="text-sm font-medium text-neutral-700 mb-2">Revenue by Day</p>
+                <svg viewBox="0 0 600 220" className="w-full h-56">
+                  <rect x="0" y="0" width="600" height="220" fill="white" />
+                  {(() => {
+                    const points = financialReport.revenueByDay.map((d: any, i: number) => ({
+                      x: 20 + (560 * i) / Math.max(1, financialReport.revenueByDay.length - 1),
+                      y: 180, // placeholder, will adjust by scale
+                      v: d.revenue,
+                      label: d.day,
+                    }));
+                    const max = Math.max(1, ...points.map((p: any) => p.v));
+                    const scaled = points.map((p: any) => ({ ...p, y: 180 - (p.v / max) * 150 }));
+                    const path = scaled.map((p: any) => `${p.x},${p.y}`).join(' ');
+                    return (
+                      <g>
+                        <polyline fill="none" stroke="#0ea5e9" strokeWidth="2" points={path} />
+                        {scaled.map((p: any, idx: number) => (
+                          <circle key={idx} cx={p.x} cy={p.y} r="3" fill="#0284c7" />
+                        ))}
+                        <line x1="20" y1="180" x2="580" y2="180" stroke="#e5e7eb" />
+                        <text x="20" y="200" fontSize="10" fill="#6b7280">{financialReport.revenueByDay[0]?.day ?? ''}</text>
+                        <text x="480" y="200" fontSize="10" fill="#6b7280" textAnchor="end">{financialReport.revenueByDay.at(-1)?.day ?? ''}</text>
+                      </g>
+                    );
+                  })()}
+                </svg>
+              </div>
+
+              {/* Top items bar chart */}
+              <div className="bg-white rounded-lg p-4 border border-neutral-200">
+                <p className="text-sm font-medium text-neutral-700 mb-4">Top Items by Revenue</p>
+                <svg viewBox="0 0 600 260" className="w-full h-64">
+                  <rect x="0" y="0" width="600" height="260" fill="white" />
+                  {(() => {
+                    const items = financialReport.topItems;
+                    const max = Math.max(1, ...items.map((i: any) => i.revenue));
+                    return (
+                      <g>
+                        {items.map((i: any, idx: number) => {
+                          const barWidth = (i.revenue / max) * 460;
+                          const y = 20 + idx * 34;
+                          return (
+                            <g key={i.name}>
+                              <text x="20" y={y + 12} fontSize="11" fill="#374151">{i.name}</text>
+                              <rect x="180" y={y} width={barWidth} height="18" rx="4" fill="#10b981" />
+                              <text x={180 + barWidth + 8} y={y + 13} fontSize="11" fill="#065f46">RM{Number(i.revenue).toFixed(2)}</text>
+                            </g>
+                          );
+                        })}
+                      </g>
+                    );
+                  })()}
+                </svg>
+              </div>
+
+              {/* Order status split mini chart */}
+              <div className="bg-white rounded-lg p-4 border border-neutral-200">
+                <p className="text-sm font-medium text-neutral-700 mb-2">Orders by Status</p>
+                <div className="flex items-end gap-4">
+                  {financialReport.statusCounts.map((s: any) => {
+                    const max = Math.max(1, ...financialReport.statusCounts.map((x: any) => x.count));
+                    const h = (s.count / max) * 120;
+                    return (
+                      <div key={s.status} className="text-center">
+                        <div className="bg-blue-500 w-10" style={{ height: `${h}px` }} />
+                        <div className="text-xs text-neutral-600 mt-1">{s.status}</div>
+                        <div className="text-xs font-medium">{s.count}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inventory Report Modal */}
+      {showInventoryReport && inventoryReport && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden">
+            <div className="px-6 py-4 border-b border-neutral-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-neutral-900">Inventory Report</h2>
+                <p className="text-sm text-neutral-500">Stock overview</p>
+              </div>
+              <button onClick={() => setShowInventoryReport(false)} className="text-neutral-600 hover:text-neutral-900">✕</button>
+            </div>
+            <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(90vh-64px)]">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Category quantities bar chart */}
+                <div className="bg-white rounded-lg p-4 border border-neutral-200">
+                  <p className="text-sm font-medium text-neutral-700 mb-4">Quantity by Category</p>
+                  <svg viewBox="0 0 600 280" className="w-full h-72">
+                    <rect x="0" y="0" width="600" height="280" fill="white" />
+                    {(() => {
+                      const categories = inventoryReport.byCategory;
+                      const max = Math.max(1, ...categories.map((c: any) => c.quantity));
+                      return (
+                        <g>
+                          {categories.map((c: any, idx: number) => {
+                            const barWidth = (c.quantity / max) * 420;
+                            const y = 20 + idx * 34;
+                            return (
+                              <g key={c.category}>
+                                <text x="20" y={y + 12} fontSize="11" fill="#374151">{c.category}</text>
+                                <rect x="180" y={y} width={barWidth} height="18" rx="4" fill="#6366f1" />
+                                <text x={180 + barWidth + 8} y={y + 13} fontSize="11" fill="#3730a3">{Number(c.quantity).toFixed(0)}</text>
+                              </g>
+                            );
+                          })}
+                        </g>
+                      );
+                    })()}
+                  </svg>
+                </div>
+
+                {/* Status split donut chart */}
+                <div className="bg-white rounded-lg p-4 border border-neutral-200">
+                  <p className="text-sm font-medium text-neutral-700 mb-4">Stock Status Split</p>
+                  <div className="flex items-center">
+                    {(() => {
+                      const data = inventoryReport.statusSplit;
+                      const total = Math.max(1, data.reduce((s: number, x: any) => s + x.count, 0));
+                      let acc = 0;
+                      const cx = 120, cy = 120, r = 80;
+                      const colors: Record<string, string> = { OK: '#22c55e', Low: '#f59e0b', Out: '#ef4444' };
+                      const toPoint = (angle: number) => [cx + r * Math.cos(angle), cy + r * Math.sin(angle)];
+                      return (
+                        <svg viewBox="0 0 240 240" className="h-64 w-64">
+                          <circle cx={cx} cy={cy} r={r} fill="#f3f4f6" />
+                          {data.map((d: any) => {
+                            const start = (acc / total) * Math.PI * 2 - Math.PI / 2;
+                            acc += d.count;
+                            const end = (acc / total) * Math.PI * 2 - Math.PI / 2;
+                            const [x1, y1] = toPoint(start);
+                            const [x2, y2] = toPoint(end);
+                            const largeArc = end - start > Math.PI ? 1 : 0;
+                            const path = `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+                            return <path key={d.label} d={path} fill={colors[d.label] || '#60a5fa'} />;
+                          })}
+                          <circle cx={cx} cy={cy} r={50} fill="white" />
+                          <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fontSize="14" fill="#111827">{total}</text>
+                        </svg>
+                      );
+                    })()}
+                    <div className="ml-6 space-y-2 text-sm">
+                      {inventoryReport.statusSplit.map((s: any) => (
+                        <div key={s.label} className="flex items-center gap-2">
+                          <span className={`inline-block w-3 h-3 rounded-sm`} style={{ backgroundColor: s.label === 'OK' ? '#22c55e' : s.label === 'Low' ? '#f59e0b' : '#ef4444' }} />
+                          <span className="text-neutral-700 w-14">{s.label}</span>
+                          <span className="font-medium">{s.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recent updates table */}
+              <div className="bg-white rounded-lg p-4 border border-neutral-200">
+                <p className="text-sm font-medium text-neutral-700 mb-3">Recent Updates</p>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-neutral-600">
+                        <th className="py-2 pr-6">Item</th>
+                        <th className="py-2 pr-6">Quantity</th>
+                        <th className="py-2 pr-6">Updated</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inventoryReport.recentUpdates.map((r: any) => (
+                        <tr key={r.id} className="border-t border-neutral-200">
+                          <td className="py-2 pr-6 text-neutral-900">{r.name}</td>
+                          <td className="py-2 pr-6">{r.quantity} {r.unit}</td>
+                          <td className="py-2 pr-6 text-neutral-600">{new Date(r.updated).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
