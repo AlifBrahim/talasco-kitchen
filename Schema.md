@@ -51,6 +51,7 @@ category VARCHAR(20) NOT NULL CHECK (category IN ('Food','Drink','Dessert')),
 is_active BOOLEAN NOT NULL DEFAULT TRUE,
 image_path VARCHAR(255),
 prep_time_minutes INT NOT NULL DEFAULT 5 CHECK (prep_time_minutes > 0)
+
 );
 - - =========
 -- Ingredients
@@ -64,6 +65,14 @@ category VARCHAR(50),
 lowthreshold NUMERIC(10,2) NOT NULL DEFAULT 5,
 updatedat TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE public.sections (
+    sectionid SERIAL PRIMARY KEY,
+    sectionname VARCHAR(50) NOT NULL UNIQUE,
+    max_capacity INT NOT NULL
+);
+
 CREATE INDEX idx_ingredients_category ON ingredients(category);
 - - Postgres schema for Restaurant Ordering System (Menu, Orders, Ingredients)
 -- Assumes PostgreSQL 13+
+

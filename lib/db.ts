@@ -1,18 +1,30 @@
 import { Pool, PoolClient, QueryConfig, QueryResult } from 'pg';
+import 'dotenv/config';
+import dotenv from 'dotenv';
+
+// Load overrides from malice.env if present (after default .env handled by next)
+dotenv.config({ path: './malice.env', override: true });
 
 declare global {
   // eslint-disable-next-line no-var
   var _fusionDbPool: Pool | undefined;
 }
 
-const pool = global._fusionDbPool ?? new Pool({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT ? Number(process.env.DB_PORT) : undefined,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
-});
+const pool = global._fusionDbPool ?? new Pool(
+  process.env.DATABASE_URL
+    ? {
+        connectionString: process.env.DATABASE_URL,
+        ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+      }
+    : {
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT ? Number(process.env.DB_PORT) : undefined,
+        database: process.env.DB_NAME,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+      }
+);
 
 if (!global._fusionDbPool) {
   global._fusionDbPool = pool;

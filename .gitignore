@@ -25,6 +25,7 @@ dist-ssr
 
 .config/
 .env
+malice.env
 /node_modules
 
 .next/

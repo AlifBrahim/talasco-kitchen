@@ -1,3 +1,9 @@
+import 'dotenv/config';
+import dotenv from 'dotenv';
+
+// Load additional overrides from malice.env if present
+dotenv.config({ path: './malice.env', override: true });
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	experimental: {
