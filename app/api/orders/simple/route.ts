@@ -15,6 +15,10 @@ type SimpleOrderRow = {
   price: number;
   category: string;
   prep_time_minutes: number | null;
+  oi_status: string;
+  oi_started_at: Date | null;
+  oi_completed_at: Date | null;
+  oi_notes: string | null;
 };
 
 export async function GET(request: NextRequest) {
@@ -46,7 +50,11 @@ export async function GET(request: NextRequest) {
         m.sku,
         m.price,
         m.category,
-        m.prep_time_minutes
+        m.prep_time_minutes,
+        oi.status AS oi_status,
+        oi.started_at AS oi_started_at,
+        oi.completed_at AS oi_completed_at,
+        oi.notes AS oi_notes
       FROM orders o
       JOIN orderitems oi ON o.orderid = oi.orderid
       JOIN menuitems m ON oi.itemid = m.itemid
@@ -80,13 +88,13 @@ export async function GET(request: NextRequest) {
         id: `${orderId}-${row.itemid}`,
         order_id: orderId,
         qty: row.quantity,
-        notes: null,
-        status: 'queued', // Default since not in orderitems schema
+        notes: row.oi_notes,
+        status: (row.oi_status || 'queued') as any,
         predicted_prep_minutes: row.prep_time_minutes ?? null,
         actual_prep_seconds: null,
         created_at: row.orderdate.toISOString(),
-        started_at: null,
-        completed_at: null,
+        started_at: row.oi_started_at ? row.oi_started_at.toISOString() : null,
+        completed_at: row.oi_completed_at ? row.oi_completed_at.toISOString() : null,
         menu_item: {
           id: row.itemid.toString(),
           name: row.itemname,

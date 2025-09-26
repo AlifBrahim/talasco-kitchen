@@ -92,7 +92,432 @@ export default function KitchenDisplay() {
   const CATEGORY = 'Food';
   const DISPATCHER_LIMIT = 8;
   const QUEUE_LIMIT = 10;
-  const AGENTS_API_BASE = (process.env.NEXT_PUBLIC_KITCHEN_AGENTS_API ?? 'http://localhost:8000').replace(/\/$/, '');
+  // Keep the Smart Queue UI panel but disable its data fetching
+  const SMART_QUEUE_ENABLED = true;
+  // Use local Next.js API routes instead of external service
+  const AGENTS_API_BASE = '';
+
+  // Smart Queue consolidation state
+  type SmartCardStatus = 'Queuing' | 'Locked';
+  type SmartCardEntry = { orderId: string; itemId: string; qty: number; note?: string | null; itemName: string; category?: string };
+  type SmartCard = {
+    key: string;
+    itemName: string;
+    note?: string | null;
+    source?: string | null;
+    category?: string;
+    quantity: number;
+    status: SmartCardStatus;
+    colorClass: string;
+    bgStart?: string; // light gradient start
+    bgEnd?: string;   // light gradient end
+    borderHex?: string; // light border color
+    isLead: boolean; // first card in group controls timer
+    createdAt: number;
+    openUntil: number; // +3m (deprecated, kept for compatibility)
+    lockAt: number; // +3m (when chef starts cooking)
+    entries: SmartCardEntry[];
+    capacity: number;
+  };
+  const [smartCards, setSmartCards] = useState<SmartCard[]>([]);
+  const cardMetaRef = React.useRef<Map<string, { createdAt: number }>>(new Map());
+  const STORAGE_KEY = 'smartQueueCardMeta_v1';
+
+  // Section colors and menu item mappings
+  const [sections, setSections] = useState<Array<{sectionid: number, sectionname: string, max_capacity: number, color: {bgStart: string, bgEnd: string, border: string}}>>([]);
+  const [menuItemSections, setMenuItemSections] = useState<Map<string, {sectionid: number, sectionname: string, max_capacity: number}>>(new Map());
+
+  // Load persisted smart card metadata (createdAt) so timers don't reset on refresh
+  // BUT only if the timestamps are still valid (not expired)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, { createdAt: number }>;
+        const map = new Map<string, { createdAt: number }>();
+        const now = Date.now();
+        const THREE_MINUTES = 180_000; // 3 minutes in ms
+        let hasValidCards = false;
+        
+        Object.entries(parsed).forEach(([k, v]) => {
+          if (v && typeof v.createdAt === 'number') {
+            // Only restore if the card is still within its merge window
+            const isStillValid = (now - v.createdAt) < THREE_MINUTES;
+            if (isStillValid) {
+              map.set(k, { createdAt: v.createdAt });
+              hasValidCards = true;
+              console.log(`Restored valid card ${k} with createdAt=${v.createdAt}`);
+            } else {
+              console.log(`Expired card ${k} not restored, createdAt=${v.createdAt} is too old`);
+            }
+          }
+        });
+        
+        cardMetaRef.current = map;
+        
+        // If no valid cards, clear localStorage to prevent future issues
+        if (!hasValidCards) {
+          localStorage.removeItem(STORAGE_KEY);
+          console.log('Cleared localStorage - no valid cards found');
+        }
+      }
+    } catch {
+      // ignore corruption
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }, []);
+
+  // Fetch sections and menu item mappings
+  useEffect(() => {
+    const fetchSectionsAndMappings = async () => {
+      try {
+        const [sectionsRes, mappingsRes] = await Promise.all([
+          fetch('/api/sections'),
+          fetch('/api/menu-items/sections')
+        ]);
+
+        if (sectionsRes.ok) {
+          const sectionsData = await sectionsRes.json();
+          setSections(sectionsData.sections || []);
+        }
+
+        if (mappingsRes.ok) {
+          const mappingsData = await mappingsRes.json();
+          console.log('Menu item sections API response:', mappingsData);
+          const mappingsMap = new Map<string, {sectionid: number, sectionname: string, max_capacity: number}>();
+          mappingsData.menuItems?.forEach((item: any) => {
+            if (item.section) {
+              mappingsMap.set(item.itemname, item.section);
+              console.log(`Mapped ${item.itemname} to section ${item.section.sectionname}`);
+            } else {
+              console.warn(`No section for item: ${item.itemname}`);
+            }
+          });
+          setMenuItemSections(mappingsMap);
+          console.log('Final menu item sections map:', Array.from(mappingsMap.entries()));
+        } else {
+          console.error('Failed to fetch menu item sections:', mappingsRes.status);
+        }
+      } catch (error) {
+        console.error('Error fetching sections and mappings:', error);
+      }
+    };
+
+    fetchSectionsAndMappings();
+  }, []);
+
+  // Get section colors for a menu item - NO FALLBACKS
+  const getSectionColorsForItem = (itemName: string) => {
+    const section = menuItemSections.get(itemName);
+    if (!section) {
+      console.warn(`No section mapping found for item: ${itemName}`);
+      console.log('Available menu item sections:', Array.from(menuItemSections.keys()));
+      return { bgStart: '#f3f4f6', bgEnd: '#e5e7eb', border: '#d1d5db' }; // Gray fallback
+    }
+    
+    const sectionWithColor = sections.find(s => s.sectionid === section.sectionid);
+    if (!sectionWithColor) {
+      console.warn(`No section color found for item: ${itemName}, section: ${section.sectionname}`);
+      console.log('Available sections:', sections.map(s => `${s.sectionname} (${s.sectionid})`));
+      return { bgStart: '#f3f4f6', bgEnd: '#e5e7eb', border: '#d1d5db' }; // Gray fallback
+    }
+    
+    console.log(`Colors for ${itemName}:`, sectionWithColor.color);
+    return sectionWithColor.color;
+  };
+
+  const getCapacityForItem = (itemName: string) => {
+    // Get the section for this item and return its max_capacity
+    const section = menuItemSections.get(itemName);
+    if (section) {
+      return section.max_capacity;
+    }
+    
+    // Fallback: find from sections array if item mapping is not loaded yet
+    const sectionFromArray = sections.find(s => 
+      menuItemSections.get(itemName)?.sectionid === s.sectionid
+    );
+    if (sectionFromArray) {
+      return sectionFromArray.max_capacity;
+    }
+    
+    // Ultimate fallback - should not happen with proper DB setup
+    return 5;
+  };
+
+  const buildGroupKey = (order: Order, item: OrderItem) => {
+    const src = order.source || 'dine_in';
+    const noteKey = item.note ? item.note.trim() : '';
+    return `${item.name}|${noteKey}|${src}`;
+  };
+
+  const recomputeSmartQueue = React.useCallback(() => {
+    const now = Date.now();
+    const baseItems: { key: string; order: Order; item: OrderItem; orderTime: number }[] = [];
+    
+    // Add error handling and consistent time parsing
+    orders.forEach(order => {
+      order.items.forEach(item => {
+        if (['queued', 'prepping'].includes(item.status)) {
+          try {
+            // Use consistent time parsing - prefer placedAt (ISO string)
+            const orderTime = order.placedAt 
+              ? new Date(order.placedAt).getTime()
+              : order.timestamp 
+                ? new Date(order.timestamp).getTime()
+                : now; // fallback to current time
+            
+            // Validate time is reasonable (not in future, not too old)
+            const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+            const validOrderTime = orderTime > now - maxAge && orderTime <= now 
+              ? orderTime 
+              : now;
+            
+            baseItems.push({ 
+              key: buildGroupKey(order, item), 
+              order, 
+              item,
+              orderTime: validOrderTime
+            });
+          } catch (error) {
+            console.error('Error parsing order time:', error, order);
+            // Fallback to current time
+            baseItems.push({ 
+              key: buildGroupKey(order, item), 
+              order, 
+              item,
+              orderTime: now
+            });
+          }
+        }
+      });
+    });
+
+    // Group by item type (name + note + source)
+    const grouped = new Map<string, { 
+      itemName: string; 
+      note?: string | null; 
+      source?: string | null; 
+      category?: string; 
+      capacity: number;
+      items: { order: Order; item: OrderItem; orderTime: number }[]
+    }>();
+
+    baseItems.forEach(({ key, order, item, orderTime }) => {
+      if (!grouped.has(key)) {
+        grouped.set(key, { 
+          itemName: item.name, 
+          note: item.note, 
+          source: order.source, 
+          category: undefined, 
+          capacity: getCapacityForItem(item.name),
+          items: []
+        });
+      }
+      grouped.get(key)!.items.push({ order, item, orderTime });
+    });
+
+    const nextCards: SmartCard[] = [];
+    let metaChanged = false;
+
+    for (const [key, g] of grouped.entries()) {
+      // Sort items by order time (FIFO)
+      g.items.sort((a, b) => a.orderTime - b.orderTime);
+
+      // Create cards based on capacity and merge window
+      let processedItems = [...g.items];
+      let cardIndex = 0;
+
+      while (processedItems.length > 0) {
+        // Initialize card metadata if this is a new card type
+        const cardKey = `${key}#${cardIndex}`;
+        if (!cardMetaRef.current.has(cardKey)) {
+          // Set the card creation time to NOW when the first item is added
+          cardMetaRef.current.set(cardKey, { createdAt: now });
+          metaChanged = true;
+        }
+
+        const createdAt = cardMetaRef.current.get(cardKey)!.createdAt;
+        const lockAt = createdAt + 180_000; // 3 minutes until chef starts cooking
+        const isQueuing = now < lockAt;
+        const status: SmartCardStatus = isQueuing ? 'Queuing' : 'Locked';
+
+        // Fill card up to capacity, respecting merge window
+        const entries: SmartCardEntry[] = [];
+        let totalQty = 0;
+        const itemsToRemove: number[] = [];
+
+        for (let i = 0; i < processedItems.length && totalQty < g.capacity; i++) {
+          const currentItem = processedItems[i];
+          const itemQty = currentItem.item.qty || 1;
+          
+          // Merge items that are still queuing (within 3-minute window)
+          if (isQueuing) {
+            const remainingCapacity = g.capacity - totalQty;
+            const useQty = Math.min(itemQty, remainingCapacity);
+            
+            entries.push({
+              orderId: currentItem.order.id,
+              itemId: currentItem.item.id,
+              qty: useQty,
+              note: currentItem.item.note,
+              itemName: currentItem.item.name
+            });
+            
+            totalQty += useQty;
+            
+            // Remove item if fully used
+            if (useQty >= itemQty) {
+              itemsToRemove.push(i);
+            } else {
+              // Partially used - update remaining quantity
+              processedItems[i] = {
+                ...currentItem,
+                item: { ...currentItem.item, qty: itemQty - useQty }
+              };
+              break;
+            }
+          } else {
+            // Merge window closed - only take the first item if this is a new card
+            if (i === 0) {
+              const remainingCapacity = g.capacity - totalQty;
+              const useQty = Math.min(itemQty, remainingCapacity);
+              
+              entries.push({
+                orderId: currentItem.order.id,
+                itemId: currentItem.item.id,
+                qty: useQty,
+                note: currentItem.item.note,
+                itemName: currentItem.item.name
+              });
+              
+              totalQty += useQty;
+              
+              // Remove item if fully used
+              if (useQty >= itemQty) {
+                itemsToRemove.push(i);
+              } else {
+                // Partially used - update remaining quantity
+                processedItems[i] = {
+                  ...currentItem,
+                  item: { ...currentItem.item, qty: itemQty - useQty }
+                };
+              }
+            }
+            break;
+          }
+        }
+
+        // Remove processed items (in reverse order to maintain indices)
+        itemsToRemove.reverse().forEach(idx => processedItems.splice(idx, 1));
+
+        if (entries.length > 0) {
+          const { bgStart: start, bgEnd: end, border } = getSectionColorsForItem(g.itemName);
+          // If card is full, immediately mark as Cooking (Locked)
+          const isFull = totalQty >= g.capacity;
+          const effectiveStatus: SmartCardStatus = isFull ? 'Locked' : status;
+          nextCards.push({
+            key: cardKey,
+            itemName: g.itemName,
+            note: g.note,
+            source: g.source,
+            category: g.category,
+            quantity: totalQty,
+            status: effectiveStatus,
+            colorClass: '',
+            bgStart: start,
+            bgEnd: end,
+            borderHex: border,
+            isLead: cardIndex === 0, // first card in this group
+            createdAt,
+            openUntil: lockAt, // Keep for compatibility
+            lockAt: lockAt,
+            entries,
+            capacity: g.capacity,
+          });
+        }
+
+        cardIndex++;
+      }
+    }
+
+    // Sort by creation time only - keep cards in their original order regardless of status
+    nextCards.sort((a, b) => a.createdAt - b.createdAt);
+    setSmartCards(nextCards);
+
+    // Persist meta if changed
+    if (metaChanged) {
+      try {
+        const obj: Record<string, { createdAt: number }> = {};
+        cardMetaRef.current.forEach((v, k) => {
+          obj[k] = { createdAt: v.createdAt };
+        });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+      } catch {
+        // ignore storage errors
+      }
+    }
+  }, [orders]);
+
+  // Recompute smart queue on orders change and every second to update timers
+  useEffect(() => {
+    recomputeSmartQueue();
+    const id = setInterval(() => recomputeSmartQueue(), 1000);
+    return () => clearInterval(id);
+  }, [recomputeSmartQueue]);
+
+  const completeSmartCard = async (card: SmartCard) => {
+    try {
+      // Complete all entries in the card with error handling
+      const updatePromises = card.entries.map(async (entry) => {
+        try {
+          return await updateOrderItemStatus(entry.orderId, entry.itemId, 'completed');
+        } catch (error) {
+          console.error(`Failed to complete item ${entry.itemId} in order ${entry.orderId}:`, error);
+          return false;
+        }
+      });
+      
+      const results = await Promise.all(updatePromises);
+      const successCount = results.filter(r => r === true).length;
+      
+      if (successCount !== card.entries.length) {
+        console.warn(`Only ${successCount}/${card.entries.length} items completed successfully`);
+      }
+      
+      // Remove the card metadata so new orders of the same type get fresh timers
+      cardMetaRef.current.delete(card.key);
+      
+      // Update localStorage to remove this card's metadata
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as Record<string, { createdAt: number }>;
+          delete parsed[card.key];
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+          console.log(`Removed completed card ${card.key} from localStorage`);
+        }
+      } catch (error) {
+        console.error('Error updating localStorage:', error);
+        // Clear corrupted localStorage
+        localStorage.removeItem(STORAGE_KEY);
+      }
+      
+      // Refresh with error handling
+      setTimeout(() => {
+        fetchOrders().catch(err => console.error('Failed to refresh orders:', err));
+        fetchHistoryOrders().catch(err => console.error('Failed to refresh history:', err));
+      }, 500);
+      
+    } catch (error) {
+      console.error('Error completing smart card:', error);
+      // Still try to refresh to get latest state
+      setTimeout(() => {
+        fetchOrders().catch(err => console.error('Failed to refresh orders:', err));
+        fetchHistoryOrders().catch(err => console.error('Failed to refresh history:', err));
+      }, 500);
+    }
+  };
 
   // Fetch active orders from API
   type SimpleGetOrdersResponse = {
@@ -228,8 +653,15 @@ export default function KitchenDisplay() {
     const load = async () => {
       try {
         setRecsError(null);
-        const dispatcherUrl = `${AGENTS_API_BASE}/agents/station-dispatcher?category=${encodeURIComponent(CATEGORY)}&limit=${encodeURIComponent(String(DISPATCHER_LIMIT))}`;
-        const queueUrl = `${AGENTS_API_BASE}/queue?category=${encodeURIComponent(CATEGORY)}&limit=${encodeURIComponent(String(QUEUE_LIMIT))}`;
+        // Disabled: keep placeholder UI without fetching data
+        if (!SMART_QUEUE_ENABLED) {
+          if (!mounted) return;
+          setRecs([]);
+          setQueueCtx([]);
+          return;
+        }
+        const dispatcherUrl = `/api/kitchen-agents/station-dispatcher?category=${encodeURIComponent(CATEGORY)}&limit=${encodeURIComponent(String(DISPATCHER_LIMIT))}`;
+        const queueUrl = `/api/kitchen-agents/queue?category=${encodeURIComponent(CATEGORY)}&limit=${encodeURIComponent(String(QUEUE_LIMIT))}`;
         const [dispatcherRes, queueRes] = await Promise.all([
           fetch(dispatcherUrl, { cache: 'no-store' }),
           fetch(queueUrl, { cache: 'no-store' }),
@@ -262,12 +694,14 @@ export default function KitchenDisplay() {
       }
     };
     load();
+    // Skip polling when disabled
+    if (!SMART_QUEUE_ENABLED) return () => { mounted = false; };
     const id = setInterval(load, 10000); // ~10s
     return () => {
       mounted = false;
       clearInterval(id);
     };
-  }, [AGENTS_API_BASE, CATEGORY]);
+  }, [AGENTS_API_BASE, CATEGORY, SMART_QUEUE_ENABLED]);
 
   // Format time ago
   const formatTimeAgo = (dateString: string): string => {
@@ -448,6 +882,16 @@ export default function KitchenDisplay() {
 
   const getActiveOrdersCount = () => {
     return orders.filter(order => order.status === 'in_progress' || order.status === 'ready').length;
+  };
+
+  // Oldest first for Traditional Queue (leftmost is the oldest)
+  const getTraditionalOrdersSorted = () => {
+    const list = getFilteredOrders();
+    return [...list].sort((a, b) => {
+      const aTime = a.placedAt ? new Date(a.placedAt).getTime() : Number.MAX_SAFE_INTEGER;
+      const bTime = b.placedAt ? new Date(b.placedAt).getTime() : Number.MAX_SAFE_INTEGER;
+      return aTime - bTime; // ascending → oldest first (leftmost)
+    });
   };
 
   const formatScore = (score?: number | null) => {
@@ -964,7 +1408,7 @@ export default function KitchenDisplay() {
             <span>View</span>
           </button>
           
-          {order.status === 'in_progress' && (
+          {(order.status === 'in_progress' || order.status === 'open') && (
             <button
               onClick={() => updateOrderStatus(order.id, 'ready')}
               className="w-full bg-green-600 text-white py-1 px-2 rounded text-xs font-medium hover:bg-green-700 transition-colors"
@@ -1162,9 +1606,9 @@ export default function KitchenDisplay() {
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <span className="text-xs font-medium text-neutral-700">Items:</span>
+                        <span className="text-xs font-medium text-neutral-700">Cards:</span>
                         <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-bold">
-                          {getAllFoodItems().length}
+                          {smartCards.length}
                         </span>
                       </div>
                     </div>
@@ -1173,10 +1617,59 @@ export default function KitchenDisplay() {
                   <div className="p-2 h-full">
                     <div className="relative h-full">
                       <div className="flex space-x-2 overflow-x-auto pb-1 custom-scrollbar horizontal-scroll h-full">
-                        {getAllFoodItems().length > 0 ? (
-                          getAllFoodItems().map((foodItem, index) => (
-                            <div key={`${foodItem.orderId}-${foodItem.itemId}`} className="flex-shrink-0 w-80 bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg border border-purple-200 overflow-hidden hover:shadow-md transition-all duration-200 cursor-pointer transform hover:-translate-y-0.5" onClick={() => openOrderModal(foodItem.order)}>
-                              {renderCompactFoodItemCard(foodItem, index + 1)}
+                        {smartCards.length > 0 ? (
+                          smartCards.map((card, index) => (
+                          <div
+                            key={card.key}
+                            className={`flex-shrink-0 w-80 rounded-lg border overflow-hidden hover:shadow-md transition-all duration-200`}
+                            style={{
+                              backgroundImage: `linear-gradient(135deg, ${card.bgStart || '#fafafa'}, ${card.bgEnd || '#f5f5f5'})`,
+                              borderColor: card.borderHex || '#e5e7eb'
+                            }}
+                          >
+                              <div className="px-3 py-2 border-b border-white/30 backdrop-blur-sm">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center space-x-2">
+                                    <span className="w-6 h-6 rounded-full bg-white/90 text-gray-800 text-xs font-bold flex items-center justify-center shadow-sm border border-white/50">{index + 1}</span>
+                                    <div>
+                                      <div className="text-sm font-bold text-gray-900 truncate drop-shadow-sm">{card.itemName}</div>
+                                      <div className="text-xs text-gray-700 font-medium">Qty {card.quantity} · Cap {card.capacity}</div>
+                                    </div>
+                                  </div>
+                                  <span className={`px-2 py-0.5 rounded-full text-xs font-semibold shadow-sm ${card.status === 'Queuing' ? 'bg-blue-500/20 text-blue-800 border border-blue-400/30' : 'bg-orange-500/20 text-orange-800 border border-orange-400/30'}`}>
+                                    {card.status === 'Queuing' ? (card.isLead ? 'Queuing' : 'Queued') : 'Cooking'}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="p-3 space-y-2">
+                                {card.note && (
+                                  <div className="bg-white/80 backdrop-blur-sm border border-white/50 text-xs text-gray-800 rounded-lg px-2 py-1.5 font-medium shadow-sm">{card.note}</div>
+                                )}
+                                {card.status === 'Queuing' && card.isLead && (
+                                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-700">
+                                    <div className="flex items-center space-x-1">
+                                      <Clock className="h-3 w-3 text-gray-600" />
+                                      <span className="font-medium">
+                                        {(() => {
+                                          const now = Date.now();
+                                          const timeLeft = Math.max(0, Math.ceil((card.lockAt - now)/1000));
+                                          return `Queuing ${timeLeft}s`;
+                                        })()}
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
+                                <div className="flex items-center justify-between pt-2 border-t border-white/30" onClick={e => e.stopPropagation()}>
+                                  <div className="text-xs text-gray-600 font-medium">{card.entries.length} order(s)</div>
+                                  <button
+                                    type="button"
+                                    onClick={() => completeSmartCard(card)}
+                                    className="bg-white/90 text-gray-800 text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-white transition-all duration-200 shadow-sm border border-white/50 backdrop-blur-sm"
+                                  >
+                                    Done
+                                  </button>
+                                </div>
+                              </div>
                             </div>
                           ))
                         ) : (
@@ -1190,7 +1683,7 @@ export default function KitchenDisplay() {
                         )}
                       </div>
                       {/* Scroll indicator */}
-                      {getAllFoodItems().length > 4 && (
+                      {smartCards.length > 4 && (
                         <div className="absolute right-0 top-1/2 transform -translate-y-1/2 bg-white shadow-md rounded-full p-1 border border-neutral-200">
                           <ArrowRight className="h-3 w-3 text-neutral-600" />
                         </div>
@@ -1222,8 +1715,8 @@ export default function KitchenDisplay() {
                   <div className="p-2 h-full">
                     <div className="relative h-full">
                       <div className="flex space-x-2 overflow-x-auto pb-1 custom-scrollbar horizontal-scroll h-full">
-                        {getFilteredOrders().length > 0 ? (
-                          getFilteredOrders().map((order) => (
+                        {getTraditionalOrdersSorted().length > 0 ? (
+                          getTraditionalOrdersSorted().map((order) => (
                             <div key={order.id} className="flex-shrink-0 w-80 bg-white rounded-lg border border-neutral-200 overflow-hidden hover:shadow-md transition-all duration-200 cursor-pointer transform hover:-translate-y-0.5" onClick={() => openOrderModal(order)}>
                               {renderMiniOrderCard(order)}
                             </div>
@@ -1244,7 +1737,7 @@ export default function KitchenDisplay() {
                         )}
                       </div>
                       {/* Scroll indicator */}
-                      {getFilteredOrders().length > 4 && (
+                      {getTraditionalOrdersSorted().length > 4 && (
                         <div className="absolute right-0 top-1/2 transform -translate-y-1/2 bg-white shadow-md rounded-full p-1 border border-neutral-200">
                           <ArrowRight className="h-3 w-3 text-neutral-600" />
                         </div>

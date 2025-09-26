@@ -11,7 +11,9 @@ from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 
+# Load default .env first, then allow overrides from malice.env if present
 load_dotenv()
+load_dotenv(dotenv_path="malice.env", override=True)
 
 LOGGER = logging.getLogger(__name__)
 
