@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { X, Clock, Users, ChefHat, Plus, Minus, ShoppingCart } from 'lucide-react';
 import { MenuItem as DBMenuItem } from '@shared/api';
+import DynamicETA from './DynamicETA';
 
 interface MenuItemModalProps {
   item: {
@@ -86,10 +87,15 @@ export default function MenuItemModal({ item, isOpen, onClose, onAddToCart }: Me
             <p className="text-neutral-600 mb-4">{item.description}</p>
             
             <div className="flex items-center space-x-6 text-sm text-neutral-500">
-              <div className="flex items-center space-x-1">
-                <Clock className="h-4 w-4" />
-                <span>{item.avg_prep_minutes || 15} min prep time</span>
-              </div>
+              <DynamicETA 
+                itemId={item.id}
+                itemName={item.name}
+                basePrepTime={item.avg_prep_minutes}
+                variant="detailed"
+                showIcon={true}
+                autoRefresh={true}
+                refreshInterval={30}
+              />
               <div className="flex items-center space-x-1">
                 <ChefHat className="h-4 w-4" />
                 <span>{item.category}</span>

@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { MenuItem as DBMenuItem, GetMenuItemsResponse, MenuItemAvailability, GetMenuAvailabilityResponse } from '@shared/api';
 import MenuItemModal from '@/components/MenuItemModal';
 import CartModal from '@/components/CartModal';
+import DynamicETA from '@/components/DynamicETA';
+import { ETAProvider, useETA } from '@/contexts/ETAContext';
 
 // Default image for items without specific images
 const defaultImage = '/placeholder.svg';
@@ -28,7 +30,7 @@ interface MenuItem {
 // Default menu items (fallback)
 const defaultMenuItems: MenuItem[] = [];
 
-export default function Index() {
+function IndexContent() {
   const [activeCategory, setActiveCategory] = useState<'main' | 'desserts' | 'drinks'>('main');
   const [cart, setCart] = useState<{[key: string]: number}>({});
   const [menuItems, setMenuItems] = useState<MenuItem[]>(defaultMenuItems);
@@ -43,6 +45,8 @@ export default function Index() {
     itemName: string;
     timestamp: number;
   }>>([]);
+  
+  const { fetchETAs } = useETA();
 
   // Fetch stock availability
   const fetchStockAvailability = async () => {
@@ -115,6 +119,15 @@ export default function Index() {
           });
           
           setMenuItems(transformedItems);
+
+          // Fetch ETAs for all available menu items
+          const availableItemIds = transformedItems
+            .filter(item => item.available)
+            .map(item => item.id);
+          
+          if (availableItemIds.length > 0) {
+            fetchETAs(availableItemIds);
+          }
 
           setCart(prevCart => {
             const validIds = new Set(transformedItems.map(item => item.id));
@@ -391,8 +404,25 @@ export default function Index() {
                      'Out of Stock'}
                   </span>
                 )}
+                
+                {/* Dynamic ETA Timer */}
+                {item.available && (
+                  <div className="absolute top-3 left-3">
+                    <DynamicETA 
+                      itemId={item.id}
+                      itemName={item.name}
+                      basePrepTime={item.avg_prep_minutes}
+                      variant="compact"
+                      className="shadow-sm"
+                      autoRefresh={true}
+                      refreshInterval={30}
+                    />
+                  </div>
+                )}
                 {item.badge && (
-                  <span className="absolute top-3 left-3 bg-status-ready text-white text-xs px-2 py-1 rounded-full">
+                  <span className={`absolute text-white text-xs px-2 py-1 rounded-full bg-status-ready ${
+                    item.available && item.avg_prep_minutes ? 'top-12 left-3' : 'top-3 left-3'
+                  }`}>
                     {item.badge}
                   </span>
                 )}
@@ -408,9 +438,24 @@ export default function Index() {
                 <h3 className={`font-semibold text-lg mb-2 ${item.available ? 'text-neutral-900' : 'text-gray-600'}`}>
                   {item.name}
                 </h3>
-                <p className={`text-sm mb-4 line-clamp-2 ${item.available ? 'text-neutral-600' : 'text-gray-500'}`}>
+                <p className={`text-sm mb-2 line-clamp-2 ${item.available ? 'text-neutral-600' : 'text-gray-500'}`}>
                   {item.description}
                 </p>
+                
+                {/* Dynamic ETA Display */}
+                {item.available && (
+                  <div className="mb-3">
+                    <DynamicETA 
+                      itemId={item.id}
+                      itemName={item.name}
+                      basePrepTime={item.avg_prep_minutes}
+                      variant="compact"
+                      showIcon={true}
+                      autoRefresh={true}
+                      refreshInterval={30}
+                    />
+                  </div>
+                )}
                 
                 {/* Show missing ingredients for unavailable items */}
                 {!item.available && item.missingIngredients && item.missingIngredients.length > 0 && (
@@ -514,5 +559,13 @@ export default function Index() {
         ))}
       </div>
     </div>
+  );
+}
+
+export default function Index() {
+  return (
+    <ETAProvider>
+      <IndexContent />
+    </ETAProvider>
   );
 }
