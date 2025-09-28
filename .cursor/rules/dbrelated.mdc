@@ -1,0 +1,5 @@
+---
+description: Always find the sql.md 1st before doing works
+globs:
+alwaysApply: true
+---
