@@ -17,10 +17,12 @@ import {
   X,
   CheckCircle,
   BarChart3,
-  PieChart
+  PieChart,
+  TrendingUp
 } from 'lucide-react';
 import Link from 'next/link';
 import { GetKSMInventoryResponse } from '@shared/api';
+import ForecastDashboard from '@/components/ForecastDashboard';
 
 interface InventoryItem {
   id: string;
@@ -45,6 +47,7 @@ interface AIPrepItem {
 }
 
 export default function KitchenManager() {
+  const [activeTab, setActiveTab] = useState<'inventory' | 'forecasting'>('inventory');
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [showFinancialReport, setShowFinancialReport] = useState(false);
   const [showInventoryReport, setShowInventoryReport] = useState(false);
@@ -511,6 +514,14 @@ export default function KitchenManager() {
                   <span className="ml-2 text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">{restockBadgeCount}</span>
                 )}
               </button>
+              <button 
+                onClick={() => setActiveTab('forecasting')}
+                title="AI Forecasting & Demand Prediction"
+                className="h-10 rounded-full px-4 bg-gradient-to-r from-green-600 to-teal-600 text-white hover:from-green-700 hover:to-teal-700 transition-all shadow flex items-center"
+              >
+                <TrendingUp className="h-4 w-4 mr-2" />
+                <span className="text-sm font-medium">Forecasting</span>
+              </button>
 
               {/* Mini KPIs */}
               <div className="text-right">
@@ -531,6 +542,40 @@ export default function KitchenManager() {
           </div>
         </div>
       </header>
+
+      {/* Tab Navigation */}
+      <div className="bg-white border-b border-neutral-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="flex space-x-8">
+            <button
+              onClick={() => setActiveTab('inventory')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'inventory'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <Package className="w-4 h-4" />
+                <span>Inventory Management</span>
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('forecasting')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'forecasting'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <TrendingUp className="w-4 h-4" />
+                <span>AI Forecasting</span>
+              </div>
+            </button>
+          </nav>
+        </div>
+      </div>
 
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -558,8 +603,11 @@ export default function KitchenManager() {
           </div>
         )}
 
-        {/* Kitchen Stock Management Content */}
-        {!loading && (
+        {/* Tab Content */}
+        {activeTab === 'inventory' && (
+          <>
+            {/* Kitchen Stock Management Content */}
+            {!loading && (
           <div className="space-y-8">
             {/* KPI Deck */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -797,6 +845,12 @@ export default function KitchenManager() {
               </div>
             )}
           </div>
+        )}
+          </>
+        )}
+
+        {activeTab === 'forecasting' && (
+          <ForecastDashboard locationId="default" />
         )}
       </main>
 

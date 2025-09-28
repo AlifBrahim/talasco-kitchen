@@ -228,3 +228,104 @@ export interface GetMenuAvailabilityResponse {
 export interface UpdateOrderStatusRequest {
   status: 'open' | 'in_progress' | 'ready' | 'served' | 'completed' | 'cancelled';
 }
+
+// =========
+// Forecasting Types
+// =========
+
+export interface DemandForecastRequest {
+  location_id?: string;
+  menu_item_id?: string;
+  start_date: string;
+  end_date: string;
+  bucket_hours?: number;
+}
+
+export interface DemandForecastResponse {
+  forecasts: {
+    menu_item_id: string;
+    menu_item_name: string;
+    bucket_start: string;
+    bucket_end: string;
+    expected_qty: number;
+    confidence: number;
+    factors: {
+      historical_avg: number;
+      trend_factor: number;
+      seasonal_factor: number;
+      holiday_factor: number;
+      weather_factor: number;
+    };
+  }[];
+  summary: {
+    total_items: number;
+    peak_hour: string;
+    total_expected_orders: number;
+  };
+}
+
+export interface PrepPlanRequest {
+  location_id?: string;
+  target_date: string;
+  time_window_hours?: number;
+  prep_lead_time_hours?: number;
+}
+
+export interface PrepPlanResponse {
+  plan_id: string;
+  target_date: string;
+  time_window: {
+    start: string;
+    end: string;
+  };
+  prep_recommendations: {
+    menu_item_id: string;
+    menu_item_name: string;
+    category: string;
+    recommended_qty: number;
+    prep_start_time: string;
+    prep_duration_minutes: number;
+    confidence: number;
+    rationale: string;
+    cost_estimate: number;
+    waste_risk: 'low' | 'medium' | 'high';
+  }[];
+  summary: {
+    total_items: number;
+    total_prep_time_hours: number;
+    estimated_cost: number;
+    waste_risk_score: number;
+  };
+}
+
+export interface TrendAnalysisRequest {
+  location_id?: string;
+  menu_item_id?: string;
+  period_days?: number;
+  granularity?: 'hour' | 'day' | 'week';
+}
+
+export interface TrendAnalysisResponse {
+  trends: {
+    menu_item_id: string;
+    menu_item_name: string;
+    category: string;
+    trend_direction: 'increasing' | 'decreasing' | 'stable';
+    trend_strength: number;
+    growth_rate: number;
+    peak_hours: string[];
+    peak_days: string[];
+    seasonal_pattern: {
+      month: number;
+      factor: number;
+    }[];
+    recommendations: string[];
+  }[];
+  summary: {
+    total_items_analyzed: number;
+    trending_up: number;
+    trending_down: number;
+    stable: number;
+    avg_growth_rate: number;
+  };
+}
