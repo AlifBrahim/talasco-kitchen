@@ -61,7 +61,7 @@ ingredientid SERIAL PRIMARY KEY,
 ingredientname VARCHAR(100) NOT NULL,
 unit VARCHAR(20),
 stockquantity NUMERIC(10,2) NOT NULL DEFAULT 0,
-category VARCHAR(50),
+Category VARCHAR(50),
 lowthreshold NUMERIC(10,2) NOT NULL DEFAULT 5,
 updatedat TIMESTAMPTZ NOT NULL DEFAULT now()
 );

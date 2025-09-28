@@ -1,28 +1,27 @@
 # Talasco Kitchen - AI-Powered Restaurant Management System
 
-A comprehensive full-stack restaurant management platform featuring AI-powered kitchen optimization, real-time order tracking, inventory management, and intelligent workflow automation. Built with Next.js, TypeScript, and integrated with advanced kitchen agent systems.
+A comprehensive full-stack restaurant management platform featuring AI-powered forecasting, real-time order tracking, inventory management, and intelligent kitchen workflow automation. Built with Next.js, TypeScript, and integrated with Amazon Nova Pro AI for advanced demand prediction and prep planning.
 
 ## 🚀 Features
 
 ### 🎯 Core Functionality
 - **Smart Menu Management** - Dynamic menu with real-time availability tracking
-- **AI-Powered Kitchen Queue** - Intelligent order prioritization based on prep time and SLA
 - **Real-Time Order Tracking** - Live updates across all order statuses
 - **Inventory Management** - Stock monitoring with automatic restock alerts
-- **Kitchen Display System** - Dual-queue interface (AI Smart Queue + Traditional Queue)
-- **Manager Dashboard** - Comprehensive analytics and control panel
+- **Kitchen Display System** - Real-time cooking queue interface
+- **Manager Dashboard** - Comprehensive analytics and AI forecasting control panel
 
-### 🤖 AI Kitchen Agents
-- **Station Dispatcher** - Optimizes cooking order based on SLA risk and efficiency
-- **SLA Watchdog** - Real-time alerts for excessive wait times
-- **Prep Planner** - Predicts and recommends pre-dining preparation quantities
-- **Inventory Controller** - Maintains optimal stock levels with restocking plans
-- **Waste Reduction Agent** - Minimizes food waste through smart substitutions
+### 🤖 AI Forecasting System
+- **Demand Forecasting** - AI-powered prediction of food orders using Amazon Nova Pro
+- **Trend Analysis** - Historical data analysis with seasonal pattern recognition
+- **Prep Planning** - Intelligent pre-preparation recommendations for chefs
+- **Cost Analysis** - Automated cost estimation for prep recommendations
+- **Waste Risk Assessment** - Smart waste prediction and mitigation strategies
 
 ### 📱 User Interfaces
 - **Customer Menu** - Online ordering with stock-aware item availability
-- **Kitchen Display** - Real-time cooking queue with AI recommendations
-- **Manager Dashboard** - Complete operational oversight and analytics
+- **Kitchen Display** - Real-time cooking queue interface
+- **Manager Dashboard** - Complete operational oversight with AI forecasting
 - **Mobile-Responsive** - Works seamlessly across all devices
 
 ## 🛠 Tech Stack
@@ -39,8 +38,8 @@ A comprehensive full-stack restaurant management platform featuring AI-powered k
 - **Runtime**: Node.js with Next.js API routes
 - **Database**: PostgreSQL
 - **Validation**: Zod schemas
-- **AI Integration**: FastAPI backend with Strands SDK
-- **Real-time**: WebSocket support for live updates
+- **AI Integration**: Amazon Nova Pro via AWS Bedrock
+- **Real-time**: Live API updates for order tracking
 
 ### Development
 - **Package Manager**: PNPM
@@ -55,8 +54,8 @@ A comprehensive full-stack restaurant management platform featuring AI-powered k
 │   ├── api/                      # API endpoints
 │   │   ├── orders/              # Order management
 │   │   ├── menu-items/          # Menu and inventory
-│   │   ├── kitchen-agents/      # AI agent integrations
-│   │   └── stations/            # Kitchen station management
+│   │   ├── forecast/            # AI forecasting endpoints
+│   │   └── kitchen-status/      # Kitchen status management
 │   ├── kitchen/                 # Kitchen display pages
 │   ├── manager/                 # Manager dashboard
 │   └── layout.tsx               # Root layout
@@ -65,11 +64,8 @@ A comprehensive full-stack restaurant management platform featuring AI-powered k
 │   ├── pages/                   # Page components
 │   ├── hooks/                   # Custom React hooks
 │   └── lib/                     # Utility functions
-├── StrandsAgent/                # AI Agent backend
-│   ├── app/                     # FastAPI application
-│   ├── main.py                  # Entry point
-│   └── requirements.txt         # Python dependencies
 ├── shared/                      # Shared types and interfaces
+├── lib/                         # Database utilities
 └── docs/                        # Documentation
 ```
 
@@ -79,7 +75,7 @@ A comprehensive full-stack restaurant management platform featuring AI-powered k
 - Node.js 18+ 
 - PNPM
 - PostgreSQL 13+
-- Python 3.9+ (for AI agents)
+- AWS Account (for AI forecasting)
 
 ### Installation
 
@@ -97,7 +93,8 @@ pnpm install
 3. **Set up environment variables**
 ```bash
 cp .env.example .env.local
-# Edit .env.local with your database and API configurations
+# Edit .env.local with your database and AWS configurations
+# Required: DATABASE_URL, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
 ```
 
 4. **Set up the database**
@@ -116,20 +113,20 @@ pnpm dev
 
 The application will be available at `http://localhost:3000`
 
-### AI Agents Setup (Optional)
+### AI Forecasting Setup
 
-For full AI functionality, set up the FastAPI backend:
+Configure AWS Bedrock for AI forecasting:
 
+1. **Set up AWS credentials** in your `.env.local`:
 ```bash
-cd StrandsAgent
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+AWS_REGION=us-east-1
+BEDROCK_MODEL_ID=amazon.nova-pro-v1:0
 ```
 
-Set the environment variable:
-```bash
-NEXT_PUBLIC_KITCHEN_AGENTS_API=http://localhost:8000
-```
+2. **Enable Amazon Nova Pro** in AWS Bedrock console
+3. **Test the forecasting** via the Manager Dashboard
 
 ## 🎮 Usage
 
@@ -139,15 +136,14 @@ NEXT_PUBLIC_KITCHEN_AGENTS_API=http://localhost:8000
 3. **Place Order** - Orders appear instantly in kitchen systems
 
 ### Kitchen Operations
-1. **AI Smart Queue** - Follow AI recommendations for optimal cooking order
-2. **Traditional Queue** - Complete orders by table for familiarity
+1. **Kitchen Display** - View real-time cooking queue
+2. **Order Management** - Track and update order statuses
 3. **Real-time Updates** - Status changes sync across all displays
-4. **SLA Monitoring** - Automatic alerts for orders approaching time limits
 
 ### Manager Dashboard
-1. **Order Analytics** - Track completion times and efficiency metrics
-2. **Inventory Management** - Monitor stock levels and restocking needs
-3. **Kitchen Performance** - View station efficiency and bottleneck analysis
+1. **AI Forecasting** - Access demand prediction and trend analysis
+2. **Prep Planning** - Get AI recommendations for pre-preparation
+3. **Inventory Management** - Monitor stock levels and restocking needs
 4. **Menu Management** - Update availability and pricing in real-time
 
 ## 🔌 API Endpoints
@@ -163,40 +159,48 @@ NEXT_PUBLIC_KITCHEN_AGENTS_API=http://localhost:8000
 - `GET /api/menu-items/availability` - Check stock availability
 - `POST /api/inventory/restock` - Trigger restocking
 
-### Kitchen Agents
-- `GET /api/kitchen-agents/station-dispatcher` - Get AI recommendations
-- `GET /api/kitchen-agents/queue` - Get contextual queue
-- `POST /api/kitchen-agents/item/start` - Start cooking item
-- `POST /api/kitchen-agents/item/complete` - Complete item
+### AI Forecasting
+- `POST /api/forecast/demand` - Get demand predictions
+- `POST /api/forecast/trends` - Analyze historical trends
+- `POST /api/forecast/prep-plan` - Generate prep recommendations
+- `GET /api/forecast/historical-data` - Get raw historical data
+- `POST /api/forecast/seed-demo-data` - Seed demo data for testing
 
-### Stations
-- `GET /api/stations` - List kitchen stations
-- `POST /api/stations/{id}/dispatch` - Dispatch to station
+### Kitchen Status
+- `GET /api/kitchen-status` - Get current kitchen status
 
-## 🤖 AI Agent Integration
+## 🤖 AI Forecasting Integration
 
-The system integrates with sophisticated AI agents that provide:
+The system integrates with Amazon Nova Pro AI for advanced forecasting capabilities:
 
-### Prep Planner
-- Analyzes historical data to predict demand
-- Generates preparation schedules for optimal efficiency
-- Considers ingredient availability and shelf life
+### Demand Forecasting
+- Analyzes historical order data to predict future demand
+- Uses seasonal patterns and trend analysis
+- Provides confidence scores for predictions
+- Considers time-of-day and day-of-week patterns
 
-### Inventory Controller
-- Monitors stock levels against demand patterns
-- Generates purchase orders with supplier optimization
-- Tracks waste and suggests alternatives
+### Trend Analysis
+- Identifies increasing, decreasing, and stable trends
+- Analyzes growth rates and peak hours
+- Provides actionable recommendations
+- Tracks seasonal patterns and external factors
+
+### Prep Planning
+- Generates intelligent pre-preparation recommendations
+- Calculates optimal quantities with safety buffers
+- Estimates costs and waste risk scores
+- Provides detailed rationale for each recommendation
 
 ## 📊 Database Schema
 
 The system uses PostgreSQL with the following key tables:
 
 - **orders** - Customer orders with status tracking
-- **orderitems** - Individual items within orders
+- **orderitems** - Individual items within orders  
 - **menuitems** - Menu catalog with pricing and categories
-- **ingredients** - Inventory tracking with thresholds
-- **menuitemingredients** - Recipe composition
-- **stations** - Kitchen station configuration
+- **ingredients** - Inventory tracking with stock levels
+- **menuitemingredients** - Recipe composition mapping
+- **sections** - Kitchen section configuration
 
 See `Schema.md` for complete database documentation.
 
@@ -213,8 +217,11 @@ pnpm start
 # Database
 DATABASE_URL=postgresql://user:password@localhost:5432/talasco_kitchen
 
-# AI Agents (optional)
-NEXT_PUBLIC_KITCHEN_AGENTS_API=http://localhost:8000
+# AWS Bedrock AI Integration
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+AWS_REGION=us-east-1
+BEDROCK_MODEL_ID=amazon.nova-pro-v1:0
 
 # Other configurations
 NEXTAUTH_SECRET=your-secret-key
@@ -246,9 +253,9 @@ pnpm lint
 
 ## 📈 Performance
 
-- **Real-time Updates** - WebSocket connections for instant synchronization
+- **Real-time Updates** - Live API updates for instant synchronization
 - **Optimized Queries** - Efficient database queries with proper indexing
-- **Caching Strategy** - React Query for API response caching
+- **AI Response Caching** - Intelligent caching for forecasting results
 - **Image Optimization** - Next.js Image component with lazy loading
 - **Bundle Optimization** - Code splitting and tree shaking
 
@@ -274,7 +281,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🙏 Acknowledgments
 
-- **Strands SDK** - For AI agent framework
+- **Amazon Nova Pro** - For advanced AI forecasting capabilities
+- **AWS Bedrock** - For AI model hosting and inference
 - **Radix UI** - For accessible component primitives
 - **TailwindCSS** - For utility-first styling
 - **Next.js Team** - For the amazing React framework
